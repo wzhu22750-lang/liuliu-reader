@@ -44,7 +44,7 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
   };
 
   const handleOpenReaderNow = () => {
-    if (importedBook) {
+    if (importedBook && progress?.isComplete) {
       onSuccess(importedBook, true);
     }
   };
@@ -217,10 +217,11 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
                 <button
                   type="button"
                   onClick={handleOpenReaderNow}
+                  disabled={!importedBook || !progress.isComplete}
                   className="flex-1 px-4 py-2.5 text-xs font-medium bg-[#da7756] hover:bg-[#c86341] text-white rounded-xl shadow-xs transition flex items-center justify-center gap-1.5"
                 >
                   <ArrowRight className="w-4 h-4" />
-                  立即进入阅读（已就绪 {progress.completedChapters} 章）
+                  {progress.isComplete ? '进入阅读（全本已就绪）' : '全部章节完成后可阅读'}
                 </button>
 
                 <button
