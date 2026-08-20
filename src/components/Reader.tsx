@@ -525,8 +525,10 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts }) => {
           <div className="pt-4 leading-relaxed font-serif">
             {currentChapter?.content ? (
               renderParagraphsWithHighlights(currentChapter.content)
-            ) : (
+            ) : currentChapter ? (
               <div className="py-20 text-center text-sm opacity-60">章节暂无内容</div>
+            ) : (
+              <div className="py-20 text-center text-sm opacity-60">本书暂无章节</div>
             )}
           </div>
 
