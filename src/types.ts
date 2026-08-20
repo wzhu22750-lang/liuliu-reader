@@ -17,10 +17,14 @@ export interface BookProgress {
   lastReadTime: number;
 }
 
+export type BookImportStatus = 'IMPORTING' | 'READY' | 'FAILED';
+
 export interface FetchStatus {
   total: number;
   completed: number;
   isFetching: boolean;
+  status?: BookImportStatus;
+  error?: string;
 }
 
 export interface Book {
