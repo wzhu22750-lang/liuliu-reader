@@ -283,18 +283,9 @@ export async function startTomatoNovelImport(
 
   for (let i = 0; i < initialChaptersMeta.length; i++) {
     const meta = initialChaptersMeta[i];
-    let chData: { title: string; content: string; wordCount?: number; fontUrl?: string };
-    try {
-      chData = await fetchTomatoChapterContent(meta.itemId);
-      if (chData.fontUrl) {
-        detectedFontUrl = chData.fontUrl;
-      }
-    } catch {
-      chData = {
-        title: meta.title,
-        content: `【${meta.title}】\n\n章节正在后台就绪中，即将为您呈现完整正文……`,
-        wordCount: 100,
-      };
+    const chData = await fetchChapterWithRetry(meta);
+    if (chData.fontUrl) {
+      detectedFontUrl = chData.fontUrl;
     }
 
     initialChapters.push({

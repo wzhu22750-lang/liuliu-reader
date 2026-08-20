@@ -475,6 +475,13 @@ app.get('/api/tomato/book-info', async (req, res) => {
     }
   }
 
+  // 不要把真实书籍的目录请求失败伪装成 10 章 demo。否则前端会把假目录当成全本，
+  // 后续导出只能得到一部分内容且无法判断数据是否可信。
+  if (!targetId.startsWith('fanqie_custom_') && !targetId.startsWith('demo_')) {
+    res.status(502).json({ error: '未能获取完整小说目录，请稍后重试或更换可访问的链接' });
+    return;
+  }
+
   // Fallback / standard rich mocked structure for demo links or offline testing
   const fallbackChapters = [
     { itemId: 'demo_1', title: '第一章 潜龙在渊', index: 0 },
@@ -657,13 +664,8 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
     }
   }
 
-  // Fallback dynamic chapter content generator
-  res.json({
-    itemId: cleanItemId,
-    title: '精彩章节',
-    content: `晨曦微露，山风猎猎。\n\n陈青玄手握古戒，盘坐于青石之上。天地灵气如潮水般自四面八方奔涌而来，在经脉中化作精纯的真气。\n\n“修行之道，如逆水行舟，不进则退。”脑海中苍老的声音缓缓回荡，指引着功法的每一处细微流转。\n\n少年目光坚毅，长身而起，望向远方的无垠群山，属于他的浩瀚征途，才正要开始。`,
-    wordCount: 150,
-  });
+  // 真实章节获取失败时必须返回错误，不能生成占位正文并让导出误以为成功。
+  res.status(502).json({ error: '未能获取该章节正文，请稍后重试' });
 });
 
 // Legacy backward-compatible endpoint
