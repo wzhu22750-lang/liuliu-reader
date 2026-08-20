@@ -292,7 +292,7 @@ export async function startTomatoNovelImport(
     isComplete: false, chaptersData: [],
   });
 
-  // Strictly sequential requests protect the source and make failure/resume diagnostics deterministic.
+  // Sequential requests protect the source and make chapter-level failure diagnostics deterministic.
   for (let i = 0; i < bookInfo.chapters.length; i++) {
     const meta = bookInfo.chapters[i];
     try {
@@ -300,10 +300,8 @@ export async function startTomatoNovelImport(
       if (chData.fontUrl) detectedFontUrl = detectedFontUrl || chData.fontUrl;
       const chapter: Chapter = {
         id: `${internalBookId}_ch_${i}`, index: i,
-        title: chData.title || meta.title,
-        content: chData.content,
-        wordCount: chData.content.length,
-        fontUrl: chData.fontUrl,
+        title: chData.title || meta.title, content: chData.content,
+        wordCount: chData.content.length, fontUrl: chData.fontUrl,
       };
       if (!chapter.content.trim()) throw new Error('正文为空');
       chapters.push(chapter);
