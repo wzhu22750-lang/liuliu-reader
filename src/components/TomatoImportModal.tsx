@@ -51,12 +51,17 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
 
   const handleExportTxt = () => {
     if (!importedBook) return;
+    setError(null);
     const chaptersToExport =
       progress?.chaptersData && progress.chaptersData.length > 0
         ? progress.chaptersData
         : importedBook.chapters.map((c) => ({ title: c.title, content: c.content }));
 
-    downloadNovelAsTxt(importedBook.title, importedBook.author, chaptersToExport);
+    try {
+      downloadNovelAsTxt(importedBook.title, importedBook.author, chaptersToExport);
+    } catch (err: any) {
+      setError(err.message || '正文仍包含未解码字符，已阻止导出乱码文件');
+    }
   };
 
   return (
