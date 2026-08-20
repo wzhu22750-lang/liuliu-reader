@@ -513,7 +513,10 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                       {book.title}
                     </div>
                     <div className="text-[11px] text-stone-500 truncate font-mono">
-                      {book.chapters.length} 章节 · {Math.round(book.totalWords / 10000 * 10) / 10} 万字
+                      {book.chapters.length} 章节 ·{' '}
+                      {book.totalWords != null
+                        ? `${Math.round(book.totalWords / 10000 * 10) / 10} 万字`
+                        : '字数统计中'}
                     </div>
                   </div>
                 </div>
