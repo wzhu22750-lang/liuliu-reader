@@ -54,12 +54,10 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
 
   // Active book action menu popup
   const [activeMenuBookId, setActiveMenuBookId] = useState<string | null>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const closeBookMenu = () => {
     setActiveMenuBookId(null);
-    setMenuPosition(null);
   };
 
   const showToast = (msg: string) => {
@@ -425,7 +423,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
           </div>
         ) : viewMode === 'grid' ? (
           /* Grid View */
-          <div className="grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">
             {filteredBooks.map((book) => {
               const progress = book.progress?.percentage || 0;
               const chapterTitle = book.progress?.chapterTitle || '未开始';
@@ -456,12 +454,6 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                             closeBookMenu();
                             return;
                           }
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const menuWidth = Math.min(176, window.innerWidth - 16);
-                          setMenuPosition({
-                            top: rect.bottom + 8,
-                            left: Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)),
-                          });
                           setActiveMenuBookId(book.id);
                         }}
                         className="p-1 rounded-lg text-stone-400 hover:text-[#141413] hover:bg-stone-200/50 transition"
@@ -496,8 +488,8 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                     </div>
                   </div>
 
-                  {/* The menu is fixed to the trigger so it is never clipped by the cover's overflow. */}
-                  {activeMenuBookId === book.id && menuPosition && (
+                  {/* The menu stays inside the cover and scales with the card width. */}
+                  {activeMenuBookId === book.id && (
                     <>
                       <div
                         className="fixed inset-0 z-40"
@@ -508,13 +500,12 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                       />
                       <div
                         onClick={(e) => e.stopPropagation()}
-                        style={{ top: menuPosition.top, left: menuPosition.left }}
-                        className="fixed z-50 w-[min(11rem,calc(100vw-1rem))] bg-white rounded-xl shadow-2xl border border-[#e8e6df] py-1 text-xs text-[#141413] animate-in fade-in zoom-in-95 font-sans"
+                        className="absolute top-10 right-2 z-50 w-[calc(100%-1rem)] max-w-44 bg-white rounded-xl shadow-2xl border border-[#e8e6df] py-1 text-[clamp(9px,2.5vw,12px)] text-[#141413] animate-in fade-in zoom-in-95 font-sans"
                       >
                         <button
                           type="button"
                           onClick={() => handleResetProgress(book)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-[#f5f4ee] flex items-center gap-2"
+                          className="w-full text-left px-2.5 py-2 hover:bg-[#f5f4ee] flex items-center gap-1.5 whitespace-normal leading-tight"
                         >
                           <RotateCcw className="w-3.5 h-3.5 text-stone-500 shrink-0" />
                           <span>从头开始阅读</span>
@@ -522,7 +513,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                         <button
                           type="button"
                           onClick={() => handleDeleteBook(book)}
-                          className="w-full text-left px-3 py-2.5 hover:bg-[#f5f4ee] text-[#ff5f38] flex items-center gap-2 font-medium"
+                          className="w-full text-left px-2.5 py-2 hover:bg-[#f5f4ee] text-[#ff5f38] flex items-center gap-1.5 font-medium whitespace-normal leading-tight"
                         >
                           <Trash2 className="w-3.5 h-3.5 shrink-0" />
                           <span>彻底删除书籍</span>
