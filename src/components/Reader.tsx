@@ -112,7 +112,8 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts }) => {
   }, [book.id]);
 
   // Current Chapter
-  const currentChapter: Chapter | undefined = book.chapters[currentChapterIndex] || book.chapters[0];
+  const currentChapter: Chapter | undefined =
+    book.chapters[currentChapterIndex] || book.chapters[0] || undefined;
 
   // Calculate overall book progress percentage
   const totalChapters = Math.max(1, book.chapters.length);
