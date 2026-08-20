@@ -525,154 +525,167 @@ const DEMO_CHAPTER_CONTENTS: Record<string, { title: string; content: string }> 
   },
 };
 
-// Single Chapter content fetcher
+// Single Chapter content fetcher. Real imports must fail loudly; demo content is only
+// available for explicit demo item IDs and is never used as a network fallback.
+function normalizeNovelContent(value: unknown): string {
+  if (typeof value === 'string') {
+    return value
+      .replace(/<p\s*>/gi, '')
+      .replace(/<\/p\s*>/gi, '\n\n')
+      .replace(/<br\s*\/?\s*>/gi, '\n')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  if (Array.isArray(value)) return value.map(normalizeNovelContent).filter(Boolean).join('\n\n');
+  return '';
+}
+
+function readContentCandidate(value: any): string {
+  return normalizeNovelContent(
+    value?.content ?? value?.text ?? value?.paragraphs ?? value?.sections ?? value?.content_list
+  );
+}
+
+function readPaginationMeta(value: any) {
+  const root = value?.data ?? value ?? {};
+  return {
+    hasMore: Boolean(root.has_more ?? root.hasMore ?? root.pagination?.has_more),
+    nextCursor: root.next_cursor ?? root.nextCursor ?? root.pagination?.next_cursor ?? null,
+  };
+}
+
+async function fetchReaderApiContent(itemId: string) {
+  const parts: string[] = [];
+  let cursor: string | null = null;
+  let page = 1;
+  let title = '';
+  let fontUrl: string | undefined;
+  let sawPagination = false;
+
+  for (let requestNumber = 0; requestNumber < 50; requestNumber++) {
+    const params = new URLSearchParams({
+      device_platform: 'android', version_code: '600', item_id: itemId,
+    });
+    if (cursor) params.set('cursor', cursor);
+    if (page > 1) params.set('page', String(page));
+    const url = `https://novel.snssdk.com/api/novel/book/reader/full/v1/?${params}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'com.dragon.read/6.0.0 (Linux; U; Android 12; zh_CN)',
+          'Accept': 'application/json, text/plain, */*',
+        },
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!response.ok) break;
+    const data = await response.json().catch(() => null);
+    if (!data) break;
+    const body = data.data ?? data;
+    const content = readContentCandidate(body);
+    if (content) parts.push(content);
+    title = title || body.title || body.chapter_title || '';
+    const pagination = readPaginationMeta(body);
+    if (!pagination.hasMore && !pagination.nextCursor) break;
+    sawPagination = true;
+    if (pagination.nextCursor && String(pagination.nextCursor) !== cursor) {
+      cursor = String(pagination.nextCursor);
+    } else {
+      page += 1;
+    }
+  }
+
+  const content = parts.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+  return { content, title, fontUrl, sawPagination };
+}
+
 app.get('/api/tomato/chapter-content', async (req, res) => {
   const { itemId } = req.query;
   if (!itemId || typeof itemId !== 'string') {
     res.status(400).json({ error: '缺少 itemId' });
     return;
   }
-
   const cleanItemId = itemId.trim();
 
-  // If it's a known demo chapter, return immediately with zero external delay
   if (DEMO_CHAPTER_CONTENTS[cleanItemId]) {
     const data = DEMO_CHAPTER_CONTENTS[cleanItemId];
-    res.json({
-      itemId: cleanItemId,
-      title: data.title,
-      content: data.content,
-      wordCount: data.content.length,
-    });
+    res.json({ itemId: cleanItemId, title: data.title, content: data.content, wordCount: data.content.length, complete: true });
     return;
   }
 
-  // Attempt 1: Fetch fanqienovel.com/reader/{itemId}
-  if (/^\d{10,25}$/.test(cleanItemId)) {
-    try {
-      const readerUrl = `https://fanqienovel.com/reader/${cleanItemId}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-      const readerRes = await fetch(readerUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-      }).finally(() => clearTimeout(timeoutId));
-
-      if (readerRes.ok) {
-        const html = await readerRes.text();
-        const stateIdx = html.indexOf('window.__INITIAL_STATE__=');
-        if (stateIdx !== -1) {
-          const raw = html.slice(stateIdx + 'window.__INITIAL_STATE__='.length);
-          let depth = 0;
-          let end = 0;
-          for (let i = 0; i < raw.length; i++) {
-            if (raw[i] === '{') depth++;
-            else if (raw[i] === '}') {
-              depth--;
-              if (depth === 0) {
-                end = i + 1;
-                break;
-              }
-            }
-          }
-          if (end > 0) {
-            const state = JSON.parse(raw.slice(0, end));
-            const chapterData = state.reader?.chapterData || {};
-            const rawContent = chapterData.content || '';
-            const chapterTitle = chapterData.title || '';
-
-            // Extract dynamic font URL if embedded in style
-            const fontMatch = html.match(/src:url\((https:\/\/[^)]+\.woff2)\)/);
-            const fontUrl = fontMatch ? fontMatch[1] : undefined;
-
-            if (rawContent) {
-              const normalizedContent = rawContent
-                .replace(/<p>/gi, '')
-                .replace(/<\/p>/gi, '\n\n')
-                .replace(/<br\s*\/?>/gi, '\n')
-                .replace(/&nbsp;/gi, ' ')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
-              const decoded = decodeTomatoText(normalizedContent);
-
-              res.json({
-                itemId: cleanItemId,
-                title: chapterTitle || '正文章节',
-                content: decoded.content,
-                wordCount: decoded.content.length,
-                fontUrl,
-                decodeStatus: decoded.status,
-                decodeMappingId: decoded.mappingId,
-                decodeUnknownCount: decoded.unknownCount,
-              });
-              return;
-            }
-          }
-        }
-      }
-    } catch (e: any) {
-      console.warn('Failed to fetch from fanqienovel web reader, falling back:', e.message);
-    }
-
-    // Attempt 2: Fetch snssdk API
-    try {
-      const url = `https://novel.snssdk.com/api/novel/book/reader/full/v1/?device_platform=android&version_code=600&item_id=${cleanItemId}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'com.dragon.read/6.0.0 (Linux; U; Android 12; zh_CN)',
-          'Accept': 'application/json, text/plain, */*',
-        },
-      }).finally(() => clearTimeout(timeoutId));
-
-      if (response.ok) {
-        const text = await response.text();
-        if (text && text.trim().startsWith('{')) {
-          const data = JSON.parse(text);
-          const rawContent = data?.data?.content || '';
-          if (rawContent) {
-            const normalizedContent = rawContent
-              .replace(/<p>/gi, '')
-              .replace(/<\/p>/gi, '\n\n')
-              .replace(/<br\s*\/?>/gi, '\n')
-              .replace(/&nbsp;/gi, ' ')
-              .replace(/\n{3,}/g, '\n\n')
-              .trim();
-            const decoded = decodeTomatoText(normalizedContent);
-
-            res.json({
-              itemId: cleanItemId,
-              title: data?.data?.title || '',
-              content: decoded.content,
-              wordCount: decoded.content.length,
-              decodeStatus: decoded.status,
-              decodeMappingId: decoded.mappingId,
-              decodeUnknownCount: decoded.unknownCount,
-            });
-            return;
-          }
-        }
-      }
-    } catch {
-      // Fall through to fallback
-    }
+  if (!/^\d{10,25}$/.test(cleanItemId)) {
+    res.status(400).json({ error: `无效的章节 item_id：${cleanItemId}` });
+    return;
   }
 
-  // Fallback dynamic chapter content generator
-  res.json({
-    itemId: cleanItemId,
-    title: '精彩章节',
-    content: `晨曦微露，山风猎猎。\n\n陈青玄手握古戒，盘坐于青石之上。天地灵气如潮水般自四面八方奔涌而来，在经脉中化作精纯的真气。\n\n“修行之道，如逆水行舟，不进则退。”脑海中苍老的声音缓缓回荡，指引着功法的每一处细微流转。\n\n少年目光坚毅，长身而起，望向远方的无垠群山，属于他的浩瀚征途，才正要开始。`,
-    wordCount: 150,
-  });
+  let lastError = '未找到正文接口响应';
+  try {
+    const readerUrl = `https://fanqienovel.com/reader/${cleanItemId}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const readerRes = await fetch(readerUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    }).finally(() => clearTimeout(timeoutId));
+
+    if (readerRes.ok) {
+      const html = await readerRes.text();
+      const stateIdx = html.indexOf('window.__INITIAL_STATE__=');
+      if (stateIdx !== -1) {
+        const raw = html.slice(stateIdx + 'window.__INITIAL_STATE__='.length);
+        let depth = 0;
+        let end = 0;
+        for (let i = 0; i < raw.length; i++) {
+          if (raw[i] === '{') depth++;
+          else if (raw[i] === '}') {
+            depth--;
+            if (depth === 0) { end = i + 1; break; }
+          }
+        }
+        if (end > 0) {
+          const state = JSON.parse(raw.slice(0, end));
+          const chapterData = state.reader?.chapterData || {};
+          const content = readContentCandidate(chapterData);
+          if (content && !chapterData.has_more && !chapterData.next_cursor) {
+            const decoded = decodeTomatoText(content);
+            const fontMatch = html.match(/src:url\((https:\/\/[^)]+\.woff2)\)/);
+            res.json({ itemId: cleanItemId, title: chapterData.title || '正文章节', content: decoded.content, wordCount: decoded.content.length, fontUrl: fontMatch?.[1], complete: true, decodeStatus: decoded.status, decodeMappingId: decoded.mappingId, decodeUnknownCount: decoded.unknownCount });
+            return;
+          }
+          lastError = '网页正文存在分页或未返回完整正文';
+        }
+      }
+    } else {
+      lastError = `网页正文请求失败：HTTP ${readerRes.status}`;
+    }
+  } catch (error: any) {
+    lastError = `网页正文请求异常：${error.message}`;
+  }
+
+  try {
+    const apiResult = await fetchReaderApiContent(cleanItemId);
+    if (apiResult.content) {
+      const decoded = decodeTomatoText(apiResult.content);
+      res.json({ itemId: cleanItemId, title: apiResult.title || '正文章节', content: decoded.content, wordCount: decoded.content.length, fontUrl: apiResult.fontUrl, complete: true, decodeStatus: decoded.status, decodeMappingId: decoded.mappingId, decodeUnknownCount: decoded.unknownCount });
+      return;
+    }
+    lastError = 'API 返回空正文';
+  } catch (error: any) {
+    lastError = `API 正文请求异常：${error.message}`;
+  }
+
+  res.status(502).json({ error: `章节 ${cleanItemId} 获取失败：${lastError}` });
 });
 
 // Legacy backward-compatible endpoint
