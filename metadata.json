@@ -1,0 +1,6 @@
+{
+  "name": "溜溜读书",
+  "description": "极简、无广告、本地优先的小说阅读器，深度整合阅读、摘抄、高亮与防剧透AI语境解读。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

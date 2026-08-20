@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --accent: #da7756;
+    --accent-hover: #c86341;
+    --ink: #141413;
+    --surface: #f5f4ee;
+    --surface-card: #ffffff;
+    --surface-border: #e8e6df;
+    --skill: #cc7d5e;
+    --diff-added: #00c853;
+    --diff-removed: #ff5f38;
+  }
+
+  body {
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, "Noto Serif SC", serif;
+    background-color: var(--surface);
+    color: var(--ink);
+  }
+
+  code, pre, kbd, samp {
+    font-family: 'JetBrains Mono', 'JetBrainsMono NFM', monospace;
+  }
+}
+
