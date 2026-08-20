@@ -286,6 +286,7 @@ export async function startTomatoNovelImport(
     sourceType: 'tomato',
     sourceUrl: urlOrInput,
     totalChapters: totalChapters,
+    totalWords: initialChapters.reduce((acc, c) => acc + (c.wordCount || 0), 0),
     chapters: initialChapters,
     progress: {
       chapterIndex: 0,
