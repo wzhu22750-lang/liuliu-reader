@@ -3,6 +3,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { decodeTomatoText } from './src/parsers/tomatoObfuscation';
 
 dotenv.config();
 
@@ -590,20 +591,24 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
             const fontUrl = fontMatch ? fontMatch[1] : undefined;
 
             if (rawContent) {
-              const cleanContent = rawContent
+              const normalizedContent = rawContent
                 .replace(/<p>/gi, '')
                 .replace(/<\/p>/gi, '\n\n')
                 .replace(/<br\s*\/?>/gi, '\n')
                 .replace(/&nbsp;/gi, ' ')
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
+              const decoded = decodeTomatoText(normalizedContent);
 
               res.json({
                 itemId: cleanItemId,
                 title: chapterTitle || '正文章节',
-                content: cleanContent,
-                wordCount: cleanContent.length,
+                content: decoded.content,
+                wordCount: decoded.content.length,
                 fontUrl,
+                decodeStatus: decoded.status,
+                decodeMappingId: decoded.mappingId,
+                decodeUnknownCount: decoded.unknownCount,
               });
               return;
             }
@@ -634,19 +639,23 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
           const data = JSON.parse(text);
           const rawContent = data?.data?.content || '';
           if (rawContent) {
-            const cleanContent = rawContent
+            const normalizedContent = rawContent
               .replace(/<p>/gi, '')
               .replace(/<\/p>/gi, '\n\n')
               .replace(/<br\s*\/?>/gi, '\n')
               .replace(/&nbsp;/gi, ' ')
               .replace(/\n{3,}/g, '\n\n')
               .trim();
+            const decoded = decodeTomatoText(normalizedContent);
 
             res.json({
               itemId: cleanItemId,
               title: data?.data?.title || '',
-              content: cleanContent,
-              wordCount: cleanContent.length,
+              content: decoded.content,
+              wordCount: decoded.content.length,
+              decodeStatus: decoded.status,
+              decodeMappingId: decoded.mappingId,
+              decodeUnknownCount: decoded.unknownCount,
             });
             return;
           }
