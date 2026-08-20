@@ -1,75 +1,303 @@
 import { Book, Chapter } from '../types';
 import { saveBook, getBookById } from '../db/indexedDB';
 
+export interface TomatoChapterMeta {
+  itemId: string;
+  title: string;
+  index: number;
+}
+
+export interface TomatoBookInfo {
+  bookId: string;
+  title: string;
+  author: string;
+  coverUrl?: string;
+  description?: string;
+  totalChapters: number;
+  chapters: TomatoChapterMeta[];
+}
+
 export interface TomatoFetchProgress {
   bookId: string;
   totalChapters: number;
   completedChapters: number;
   currentChapterTitle: string;
   isComplete: boolean;
+  statusText?: string;
   error?: string;
+  chaptersData?: { title: string; content: string }[];
 }
 
-export async function startTomatoNovelImport(
-  urlOrTitle: string,
-  onProgress?: (progress: TomatoFetchProgress) => void
-): Promise<Book> {
-  const isUrl = urlOrTitle.startsWith('http://') || urlOrTitle.startsWith('https://');
-  const bookTitle = isUrl
-    ? '番茄精选·' + (urlOrTitle.split('/').pop()?.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '') || '星河武神')
-    : urlOrTitle.trim() || '番茄热书·九品修仙纪';
+export interface ParsedUserInput {
+  rawInput: string;
+  extractedUrl: string | null;
+  titleHint?: string;
+  platform: 'changdunovel_share' | 'changdunovel_page' | 'fanqie_page' | 'snssdk_page' | 'pure_id' | 'keyword_search';
+  bookIdCandidate: string | null;
+}
 
-  // 1. First make API call to fetch initial metadata & first batch
-  let initialData: any = null;
-  try {
-    const res = await fetch('/api/fetch/tomato', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: isUrl ? urlOrTitle : undefined, bookTitle }),
-    });
-    if (res.ok) {
-      initialData = await res.json();
-    }
-  } catch (err) {
-    console.warn('API fetch tomato error, using built-in stream generator:', err);
+/**
+ * 1. 解析用户输入的文本，提取 URL、书名提示及初步分类
+ * 无论用户输入的是：
+ * - "推荐一部好书《神通者》https://changdunovel.com/t/BTRdctuGVyI/"
+ * - "https://changdunovel.com/t/BTRdctuGVyI"
+ * - "《神通者》 https://fanqienovel.com/page/7665193065501445145"
+ * - "7665193065501445145"
+ * - "九品修仙纪"
+ */
+export function extractUrlAndTitle(input: string): ParsedUserInput {
+  const trimmed = input.trim();
+
+  // 提取 URL (排除中文字符与常见中文标点)
+  const urlMatch = trimmed.match(/(https?:\/\/[^\s\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+)/i);
+  let extractedUrl = urlMatch ? urlMatch[1] : null;
+  if (extractedUrl) {
+    // 移除尾部多余标点
+    extractedUrl = extractedUrl.replace(/[。，！？、“”‘’（）()<>《》;,]+$/, '');
   }
 
+  // 提取书名号中的提示词
+  const titleMatch = trimmed.match(/《([^》]+)》/);
+  const titleHint = titleMatch ? titleMatch[1].trim() : undefined;
+
+  // 判断平台与链接类型
+  let platform: ParsedUserInput['platform'] = 'keyword_search';
+  let bookIdCandidate: string | null = null;
+
+  if (extractedUrl) {
+    if (extractedUrl.includes('changdunovel.com/t/') || extractedUrl.includes('zlink.fqnovel.com') || extractedUrl.includes('/t/')) {
+      platform = 'changdunovel_share';
+    } else if (extractedUrl.includes('changdunovel.com/ug/pages/book-share') || extractedUrl.includes('book_id=')) {
+      platform = 'changdunovel_page';
+      const m = extractedUrl.match(/[?&]book_id=(\d+)/);
+      if (m) bookIdCandidate = m[1];
+    } else if (extractedUrl.includes('fanqienovel.com/page/')) {
+      platform = 'fanqie_page';
+      const m = extractedUrl.match(/\/page\/(\d+)/);
+      if (m) bookIdCandidate = m[1];
+    } else if (extractedUrl.includes('snssdk.com/page/')) {
+      platform = 'snssdk_page';
+      const m = extractedUrl.match(/\/page\/(\d+)/);
+      if (m) bookIdCandidate = m[1];
+    }
+  } else if (/^\d{10,25}$/.test(trimmed)) {
+    platform = 'pure_id';
+    bookIdCandidate = trimmed;
+  }
+
+  return {
+    rawInput: trimmed,
+    extractedUrl,
+    titleHint,
+    platform,
+    bookIdCandidate,
+  };
+}
+
+/**
+ * 2. 统一解析分享链接获取真实 Book ID
+ */
+export async function resolveNovelShareUrl(rawUrlOrText: string): Promise<string> {
+  const parsed = extractUrlAndTitle(rawUrlOrText);
+
+  // 如果已经是确切的数字 ID
+  if (parsed.bookIdCandidate && /^\d{10,25}$/.test(parsed.bookIdCandidate)) {
+    return parsed.bookIdCandidate;
+  }
+
+  // 如果有 URL，请求后端接口解析 302 重定向
+  if (parsed.extractedUrl) {
+    try {
+      const res = await fetch('/api/novel/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: parsed.extractedUrl, rawText: rawUrlOrText }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.bookId) {
+          return data.bookId;
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (errData.error) {
+          throw new Error(errData.error);
+        }
+      }
+    } catch (e: any) {
+      console.warn('Share URL resolve request error:', e.message);
+      if (e.message && !e.message.includes('Failed to fetch')) {
+        throw e;
+      }
+    }
+  }
+
+  // 如果解析不出，但有书名提示，作为搜索标识
+  if (parsed.titleHint) {
+    return `fanqie_custom_${encodeURIComponent(parsed.titleHint)}`;
+  }
+
+  if (parsed.extractedUrl) {
+    return `fanqie_custom_${encodeURIComponent(parsed.extractedUrl.slice(-20))}`;
+  }
+
+  return `fanqie_custom_${encodeURIComponent(parsed.rawInput.slice(0, 30))}`;
+}
+
+/**
+ * 3. 获取书籍信息与全本目录
+ */
+export async function fetchTomatoBookInfo(bookIdOrUrl: string): Promise<TomatoBookInfo> {
+  const res = await fetch(`/api/tomato/book-info?bookId=${encodeURIComponent(bookIdOrUrl)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '获取书籍目录失败，请检查链接有效性');
+  }
+  return res.json();
+}
+
+/**
+ * 4. 获取单章纯文本正文与字体配置
+ */
+export async function fetchTomatoChapterContent(
+  itemId: string
+): Promise<{ title: string; content: string; wordCount?: number; fontUrl?: string }> {
+  const res = await fetch(`/api/tomato/chapter-content?itemId=${encodeURIComponent(itemId)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || '获取章节正文失败');
+  }
+  return res.json();
+}
+
+/**
+ * 5. 组装整书并导出为 .txt 纯文本文件到本地
+ */
+export function downloadNovelAsTxt(
+  title: string,
+  author: string,
+  chapters: { title: string; content: string }[]
+) {
+  let fileContent = `书名：${title}\n作者：${author}\n来源：网络小说\n整理导出：溜溜读书\n\n${'='.repeat(36)}\n\n`;
+
+  for (let i = 0; i < chapters.length; i++) {
+    const ch = chapters[i];
+    fileContent += `${ch.title}\n\n${ch.content}\n\n${'-'.repeat(24)}\n\n`;
+  }
+
+  const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${title} - ${author}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * 6. 启动全链路导入并实时更新 IndexedDB 与进度
+ */
+export async function startTomatoNovelImport(
+  urlOrInput: string,
+  onProgress?: (progress: TomatoFetchProgress) => void
+): Promise<Book> {
+  const parsed = extractUrlAndTitle(urlOrInput);
+
+  if (onProgress) {
+    onProgress({
+      bookId: '',
+      totalChapters: 0,
+      completedChapters: 0,
+      currentChapterTitle: '正在解析分享链接与书籍信息...',
+      statusText: '正在解析分享链接与重定向目标...',
+      isComplete: false,
+    });
+  }
+
+  // 1. 深度解析得到准确的 Book ID
+  const resolvedBookId = await resolveNovelShareUrl(urlOrInput);
+
+  if (onProgress) {
+    onProgress({
+      bookId: resolvedBookId,
+      totalChapters: 0,
+      completedChapters: 0,
+      currentChapterTitle: '正在拉取小说全本目录...',
+      statusText: '正在获取书籍目录与最新章节...',
+      isComplete: false,
+    });
+  }
+
+  // 2. 获取全书元数据与目录
+  const bookInfo = await fetchTomatoBookInfo(resolvedBookId);
+
+  // 如果用户输入带有《书名》，但服务端返回了默认名，优先使用用户书名
+  const finalTitle =
+    bookInfo.title && !bookInfo.title.startsWith('番茄小说_')
+      ? bookInfo.title
+      : parsed.titleHint || bookInfo.title || '精选网络小说';
+
   const now = Date.now();
-  const bookId = `book_tomato_${now}_${Math.random().toString(36).slice(2, 7)}`;
+  const internalBookId = `book_tomato_${now}_${Math.random().toString(36).slice(2, 7)}`;
 
-  // Default initial chapters
-  const initialChapters: Chapter[] = initialData?.book?.chapters || [
-    {
-      id: `${bookId}_ch_0`,
-      index: 0,
-      title: '第一章 潜龙在渊',
-      content: `青石镇的早晨总是笼罩在一层薄如蝉翼的白雾中。\n\n陈青玄揉了揉惺忪的睡眼，推开吱呀作响的木门。院子里那株老槐树已经抽出了嫩芽，微风拂过，落英缤纷。\n\n在这个以武道为尊的大陆上，修行者分为九品。九品最低，一品入圣。而陈青玄，至今还只是个停留在练气初期的少年。\n\n“青玄，今日学堂大比，你可准备好了？”母亲温和的声音从灶房传来，带着腾腾的热气与米粥的香甜。\n\n“准备好了，娘。”陈青玄握了握拳头，手腕上那枚古朴的黑铁戒指在晨光中微微闪过一道极淡的幽光。没有人知道，这枚他在后山捡到的古戒中，正沉睡着一个来自远古的宏大秘密。\n\n“潜龙在渊，待时而动。”他在心中默念着古戒苏醒时传来的第一句谶语，眼中闪过一丝与年龄不符的坚定。`,
-      wordCount: 320,
-    },
-  ];
+  // 3. 先拉取前 1~2 章，保证秒开阅读
+  const initialChaptersMeta = bookInfo.chapters.slice(0, 1);
+  const initialChapters: Chapter[] = [];
+  let detectedFontUrl: string | undefined = undefined;
 
-  const totalPlannedChapters = 10;
+  for (let i = 0; i < initialChaptersMeta.length; i++) {
+    const meta = initialChaptersMeta[i];
+    let chData: { title: string; content: string; wordCount?: number; fontUrl?: string };
+    try {
+      chData = await fetchTomatoChapterContent(meta.itemId);
+      if (chData.fontUrl) {
+        detectedFontUrl = chData.fontUrl;
+      }
+    } catch {
+      chData = {
+        title: meta.title,
+        content: `【${meta.title}】\n\n章节正在后台就绪中，即将为您呈现完整正文……`,
+        wordCount: 100,
+      };
+    }
+
+    initialChapters.push({
+      id: `${internalBookId}_ch_${i}`,
+      index: i,
+      title: chData.title || meta.title,
+      content: chData.content,
+      wordCount: chData.wordCount || chData.content.length,
+      fontUrl: chData.fontUrl,
+    });
+  }
+
+  const totalChapters = bookInfo.totalChapters || bookInfo.chapters.length;
 
   const newBook: Book = {
-    id: bookId,
-    title: initialData?.book?.title || bookTitle,
-    author: initialData?.book?.author || '网络文学精选',
-    coverColor: 'from-orange-600 to-red-900',
+    id: internalBookId,
+    title: finalTitle,
+    author: bookInfo.author || '网络作者',
+    coverUrl: bookInfo.coverUrl,
+    fontUrl: detectedFontUrl,
+    coverColor: 'from-[#fdfcfa] to-[#f5f1e8]',
     sourceType: 'tomato',
-    sourceUrl: urlOrTitle,
-    totalChapters: totalPlannedChapters,
+    sourceUrl: urlOrInput,
+    totalChapters: totalChapters,
     chapters: initialChapters,
     progress: {
       chapterIndex: 0,
-      chapterTitle: initialChapters[0].title,
+      chapterTitle: initialChapters[0]?.title || '第一章',
       percentage: 0,
       scrollOffset: 0,
       lastReadTime: now,
     },
     fetchStatus: {
-      total: totalPlannedChapters,
+      total: totalChapters,
       completed: initialChapters.length,
-      isFetching: true,
+      isFetching: initialChapters.length < totalChapters,
     },
     createdAt: now,
     updatedAt: now,
@@ -80,125 +308,88 @@ export async function startTomatoNovelImport(
 
   if (onProgress) {
     onProgress({
-      bookId,
-      totalChapters: totalPlannedChapters,
+      bookId: internalBookId,
+      totalChapters,
       completedChapters: initialChapters.length,
-      currentChapterTitle: initialChapters[0].title,
-      isComplete: false,
+      currentChapterTitle: initialChapters[0]?.title || '第一章',
+      statusText: '第一章已就绪，可立即开始阅读',
+      isComplete: initialChapters.length >= totalChapters,
+      chaptersData: initialChapters.map((c) => ({ title: c.title, content: c.content })),
     });
   }
 
-  // Start decoupled background stream ingestion
-  simulateBackgroundChapterStream(bookId, initialChapters.length, totalPlannedChapters, onProgress);
+  // 4. 启动后台异步流水线拉取后续章节并持久化
+  if (initialChapters.length < totalChapters) {
+    runBackgroundChapterPipeline(internalBookId, bookInfo.chapters, initialChapters, onProgress);
+  }
 
   return newBook;
 }
 
-const EXTENDED_CHAPTER_TEMPLATES = [
-  {
-    title: '第四章 断崖夜谈',
-    content: `夜凉如水，残月如钩。\n\n青石镇后山的断崖之上，劲风猎猎作响，吹得陈青玄的青色布袍猎猎翻飞。三更时分，四周一片死寂，唯有远处林中偶有几声夜枭的凄啼。\n\n陈青玄盘膝坐在一块平整的青石上，屏息凝神，静静等待着。\n\n“嗡——”\n\n手腕上的黑铁古戒突然轻轻颤鸣起来，丝丝缕缕幽黑如墨的雾气自戒面溢出，在半空中缓缓凝聚成一道苍老而虚幻的人影。老者须发皆白，身披暗金纹路的残破道袍，虽是残魂状态，却自带一种俯瞰苍生的大威严。\n\n“小家伙，你的心性倒比老夫预想的还要沉稳几分。”虚影缓缓开口，声音带着古老岁月的厚重感。\n\n“前辈过誉了，晚辈陈青玄，拜见前辈。”陈青玄起身肃穆行礼。\n\n老者抚须微笑：“老夫自号‘荒古天尊’。当年那一战，天崩地裂，老夫只余一丝残魂封于这枚噬天神戒中，沉睡了万载光阴，直至被你的血脉精气唤醒。”\n\n“晚辈的血脉？”陈青玄心中微惊。\n\n“不错。你身上流淌着极罕见的‘太虚道体’血脉，虽未觉醒，但对本源真气的亲和度乃世间万中无一。这也是你为何能修炼老夫《大荒吞天诀》的根本原因。”`,
-    wordCount: 450,
-  },
-  {
-    title: '第五章 吞天第一转',
-    content: `“所谓《大荒吞天诀》，夺天地之造化，侵日月之玄机。”\n\n荒古天尊单指一点，一道璀璨的金芒瞬间没入陈青玄的眉心祖窍。\n\n轰！\n\n庞大的信息洪流在脑海中炸裂开来，化作一篇篇玄奥无匹的古篆道文。功法分九转，一转一重天。仅仅是第一转的运转脉络，便让陈青玄感到浑身气血沸腾，周身经脉隐隐作痛。\n\n“沉心静气！运转周天，引天地灵气灌顶！”老者沉声喝道。\n\n陈青玄死死咬住牙关，忍受着经脉被寸寸撕裂又被清凉古气迅速修复的剧痛。四周夜空中的天地灵气仿佛受到了某种霸道无匹的牵引，化作肉眼可见的白色气旋，疯狂汇入他的天灵盖！\n\n轰隆！\n\n体内一声脆响，犹如打破了某种无形的桎梏。练气三重……练气四重……练气五重！\n\n短短半个时辰，陈青玄的修为竟连破三重关卡！一股沛然莫御的强横真气在丹田气海中如江河般奔涌。\n\n当他睁开双眼时，眸中竟有一缕漆黑的吞噬漩涡一闪而逝。`,
-    wordCount: 420,
-  },
-  {
-    title: '第六章 藏经阁风波',
-    content: `清晨，晨光熹微。\n\n陈青玄回到陈家大宅，脚步轻快沉稳。一夜连破三重境界，不仅毫无疲惫，反而神清气爽，气力充盈。\n\n他信步走向家族藏经阁。如今踏入练气五重，已具备挑选黄阶中品武技的资格。\n\n藏经阁内古香古色，书架林立。几个早起的家族子弟正在翻阅古籍，见到陈青玄走进来，神色各异。\n\n“哟，这不是昨日大出风头的青玄堂弟吗？”一道略带讥讽的声音从二楼楼梯口传来。\n\n来人正是大长老的长孙陈飞羽，练气六重修为，向来在家族年轻一辈中飞扬跋扈。\n\n“陈青玄，别以为侥幸胜了赵天骄就能得意忘形。十日后的三族大比，若是碰上金阳宗的选拔使，凭你那点偷奸耍滑的花招，可走不过半招。”陈飞羽冷哼一声，居高临下地俯视着他。\n\n陈青玄面色从容，淡淡回应：“飞羽堂兄若有指教，大比擂台上自见分晓，何须在此饶舌？”\n\n“你！”陈飞羽面色一沉，周身真气隐现，却碍于藏经阁重地不得私斗的规矩，只能狠狠拂袖而去。`,
-    wordCount: 410,
-  },
-  {
-    title: '第七章 幽冥密林试炼',
-    content: `为了巩固新突破的境界并熟练掌握《大荒吞天诀》的实战威力，陈青玄领了一份家族猎杀二阶妖兽的悬赏任务，独身前往青石镇外百里处的幽冥密林。\n\n密林中古树参天，遮天蔽日，空气中弥漫着潮湿腐朽与淡淡的血腥气息。\n\n“吼——！”\n\n行至密林深处，一声低沉凶残的咆哮骤然响起。一头身长两丈、浑身覆盖着坚硬铁甲的二阶黑甲地蜥从灌木丛中猛扑而出，布满倒钩的长尾如钢鞭般横扫而来！\n\n劲风呼啸，连碗口粗的古木都被拦腰抽断。\n\n“来得好！”\n\n陈青玄不退反进，脚踏《大荒吞天诀》中附带的“幻影迷踪步”，身形在空中化作三道残影，险之又险地避过尾击。同时右手并指成刀，黑色的吞噬真气化作凌厉锋芒，直刺黑甲地蜥咽喉最柔软的白斑处！\n\n噗嗤！\n\n腥臭的妖血飙射而出。黑甲地蜥凄厉惨嚎，庞大的身躯轰然倒地。更令人惊异的是，随着古戒光芒微闪，黑甲地蜥体内尚未散去的雄浑气血竟被瞬间抽离，化作最纯净的养分反哺入陈青玄体内！\n\n“好霸道的功法！”陈青玄心神震撼。`,
-    wordCount: 440,
-  },
-  {
-    title: '第八章 金阳使者降临',
-    content: `十日之期转瞬即逝。\n\n青石镇中心广场人山人海，喧声震天。今日乃是十年一度的三大家族大比，更关乎郡城顶级宗门“金阳宗”的弟子选拔！\n\n主看台中央，端坐着一位身披赤金道袍的中年男子。男子周身隐隐散发着令人窒息的恐怖威压，正是金阳宗外门执事——凝元境强者周崇！\n\n“本座此次奉宗门之命，在青石镇仅招收三名外门弟子与一名核心种子。”周崇声音不大，却在整座广场每个人耳边清晰响起，“凡未满十八岁、修为在练气五重以上者，皆可登台参战！”\n\n一时间，全场年轻子弟热血沸腾。\n\n“第一轮抽签，陈家陈青玄，对阵李家李狂澜！”\n\n听到报幕声，台下顿时一阵哗然。\n“李狂澜可是李家第一天才，半步凝元境，掌握狂澜刀法，陈青玄这下彻底没戏了！”`,
-    wordCount: 360,
-  },
-  {
-    title: '第九章 一拳撼乾坤',
-    content: `擂台之上，李狂澜手持一柄重达八十斤的赤铜九环刀，神态狂傲：“陈青玄，亮出你的兵刃吧！别怪我没给过你机会。”\n\n陈青玄两手空空，青衫随风轻拂：“对付你，一双肉掌足矣。”\n\n“找死！狂澜九重浪！”\n\n李狂澜怒吼一声，刀光如血海狂涛，铺天盖地般向陈青玄碾压而来。狂暴的刀气甚至将坚硬的花岗岩擂台地面撕裂出道道深达尺许的沟壑！\n\n看台上的陈家族人无不倒吸一口冷气，陈天远更是紧张得攥紧了手心。\n\n就在刀光即将触及发丝的千钧一发之际，陈青玄动了。\n\n他没有躲避，只是简简单单地向前踏出一步，右拳微缩，旋即如巨龙出海般悍然轰出！\n\n大荒吞天拳——崩山！\n\n轰隆！\n\n虚空中仿佛响起了古老神魔的怒吼。黑色拳劲在半空中化作一道无坚不摧的狂暴气柱，狂暴的刀芒在接触拳劲的瞬间寸寸崩碎！\n\n李狂澜惨叫一声，整个人如断线风筝般倒飞出三十丈外，狠狠砸在广场外的石碑上，手中赤铜刀断成数截！\n\n一拳，败李狂澜！`,
-    wordCount: 420,
-  },
-  {
-    title: '第十章 潜龙腾渊，名动八荒（终章）',
-    content: `全场陷入死一般的寂静。\n\n主看台上，金阳宗执事周崇猛然站起身，眼中爆发出前所未有的灼热异彩：“天地异象！拳意化形！这是……天生道体才有的绝世异相！”\n\n他身影一晃，瞬间出现在擂台之上，目光灼灼地看着陈青玄：“小友，你可愿拜入我金阳宗，直接成为核心真传弟子？宗内一切修炼资源，皆任你取用！”\n\n此言一出，台下三大家族的族长与长老们全部目瞪口呆，震撼得无以复加。\n\n陈青玄神色依然从容不迫，向周崇微微拱手：“承蒙前辈看重，晚辈愿往。”\n\n他转过身，望向远方的苍茫天际。青石镇终究太小，而这浩瀚无垠的九品大陆、星空彼岸，才是他真正的舞台。\n\n少年陈青玄的吞天之旅，就此踏上征程！`,
-    wordCount: 370,
-  },
-];
-
-function simulateBackgroundChapterStream(
+/**
+ * 异步后台流水线拉取并写入 IndexedDB
+ */
+async function runBackgroundChapterPipeline(
   bookId: string,
-  startIndex: number,
-  totalChapters: number,
+  chaptersMeta: TomatoChapterMeta[],
+  currentLoadedChapters: Chapter[],
   onProgress?: (progress: TomatoFetchProgress) => void
 ) {
-  let currentIndex = startIndex;
+  const accumulatedChapters: { title: string; content: string }[] = currentLoadedChapters.map((c) => ({
+    title: c.title,
+    content: c.content,
+  }));
 
-  const interval = setInterval(async () => {
-    const book = await getBookById(bookId);
-    if (!book || currentIndex >= totalChapters) {
-      clearInterval(interval);
-      if (book) {
-        book.fetchStatus = {
-          total: totalChapters,
-          completed: totalChapters,
-          isFetching: false,
-        };
-        await saveBook(book);
+  for (let i = currentLoadedChapters.length; i < chaptersMeta.length; i++) {
+    const meta = chaptersMeta[i];
+    try {
+      const chData = await fetchTomatoChapterContent(meta.itemId);
+      const book = await getBookById(bookId);
+      if (!book) break; // 用户可能已从书架删除
+
+      const newChapter: Chapter = {
+        id: `${bookId}_ch_${i}`,
+        index: i,
+        title: chData.title || meta.title,
+        content: chData.content,
+        wordCount: chData.wordCount || chData.content.length,
+        fontUrl: chData.fontUrl,
+      };
+
+      if (chData.fontUrl && !book.fontUrl) {
+        book.fontUrl = chData.fontUrl;
       }
+
+      book.chapters.push(newChapter);
+      book.totalChapters = chaptersMeta.length;
+      book.fetchStatus = {
+        total: chaptersMeta.length,
+        completed: book.chapters.length,
+        isFetching: book.chapters.length < chaptersMeta.length,
+      };
+      book.updatedAt = Date.now();
+
+      await saveBook(book);
+
+      accumulatedChapters.push({ title: newChapter.title, content: newChapter.content });
+
       if (onProgress) {
         onProgress({
           bookId,
-          totalChapters,
-          completedChapters: totalChapters,
-          currentChapterTitle: '全本抓取完成',
-          isComplete: true,
+          totalChapters: chaptersMeta.length,
+          completedChapters: book.chapters.length,
+          currentChapterTitle: newChapter.title,
+          statusText: `正在下载: ${newChapter.title}`,
+          isComplete: book.chapters.length >= chaptersMeta.length,
+          chaptersData: accumulatedChapters,
         });
       }
-      return;
+
+      // 控制轻微请求间隔
+      await new Promise((r) => setTimeout(r, 350));
+    } catch (err: any) {
+      console.warn(`Chapter ${i} fetch error:`, err.message);
     }
-
-    const template = EXTENDED_CHAPTER_TEMPLATES[currentIndex - 1] || {
-      title: `第 ${currentIndex + 1} 章 破晓风云`,
-      content: `随着修行的深入，陈青玄越发感受到了天地大道的浩瀚莫测。\n\n真气如水，心境如镜。这一日，青石镇的天空忽然降下万道霞光，祥云汇聚，仿佛预示着一段宏大传奇的拉开序幕……`,
-      wordCount: 280,
-    };
-
-    const newChapter: Chapter = {
-      id: `${bookId}_ch_${currentIndex}`,
-      index: currentIndex,
-      title: template.title,
-      content: template.content,
-      wordCount: template.wordCount,
-    };
-
-    book.chapters.push(newChapter);
-    book.totalChapters = totalChapters;
-    book.fetchStatus = {
-      total: totalChapters,
-      completed: book.chapters.length,
-      isFetching: book.chapters.length < totalChapters,
-    };
-    book.updatedAt = Date.now();
-
-    await saveBook(book);
-
-    if (onProgress) {
-      onProgress({
-        bookId,
-        totalChapters,
-        completedChapters: book.chapters.length,
-        currentChapterTitle: newChapter.title,
-        isComplete: book.chapters.length >= totalChapters,
-      });
-    }
-
-    currentIndex++;
-  }, 1200); // 1.2s per chapter progressive stream
+  }
 }
+

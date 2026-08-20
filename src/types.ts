@@ -6,6 +6,7 @@ export interface Chapter {
   title: string;
   content: string; // Plain text with \n\n paragraph separators
   wordCount: number;
+  fontUrl?: string;
 }
 
 export interface BookProgress {
@@ -28,6 +29,7 @@ export interface Book {
   author: string;
   coverUrl?: string;
   coverColor?: string; // Aesthetic gradient or minimal pastel background
+  fontUrl?: string; // custom web font woff2 for novel platforms
   sourceType: SourceType;
   sourceUrl?: string;
   totalChapters: number;

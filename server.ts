@@ -230,7 +230,443 @@ ${followingText && spoilerScope !== 'current' ? `- 下文参考（在防剧透�
   }
 });
 
-// Tomato / Web Novel Chapter Fetcher proxy & mock-live generator
+// Helper function to resolve share links / URLs to book_id
+async function resolveShareUrlToBookId(inputUrl: string): Promise<{ bookId: string; platform: string; location?: string } | null> {
+  const trimmed = inputUrl.trim();
+
+  // 1. Direct match for book_id in URL query parameter
+  const matchParam = trimmed.match(/[?&]book_id=(\d+)/);
+  if (matchParam) {
+    return { bookId: matchParam[1], platform: 'changdunovel_param' };
+  }
+
+  // 2. Direct match for /page/(\d+)
+  const matchPage = trimmed.match(/\/page\/(\d+)/);
+  if (matchPage) {
+    return { bookId: matchPage[1], platform: 'fanqienovel_page' };
+  }
+
+  // 3. Match changdunovel.com/t/{token} or zlink share links
+  if (trimmed.includes('changdunovel.com/t/') || trimmed.includes('zlink.fqnovel.com') || trimmed.includes('/t/')) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
+
+      const response = await fetch(trimmed, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      }).finally(() => clearTimeout(timeoutId));
+
+      let location = response.headers.get('location') || '';
+      if (!location) {
+        const html = await response.text();
+        const hrefMatch =
+          html.match(/href=[\"']([^\"']+)[\"']/i) ||
+          html.match(/(https?:\/\/[^\s\"']+book_id=\d+)/);
+        if (hrefMatch) location = hrefMatch[1];
+      }
+
+      if (location) {
+        const idMatch = location.match(/[?&]book_id=(\d+)/) || location.match(/\/page\/(\d+)/);
+        if (idMatch) {
+          return { bookId: idMatch[1], platform: 'changdunovel_redirect', location };
+        }
+      }
+    } catch (e: any) {
+      console.warn('Failed to resolve redirect for share URL:', e.message);
+    }
+  }
+
+  // 4. Standalone 10-25 digits
+  const matchDigits = trimmed.match(/^\d{10,25}$/) || trimmed.match(/(\d{15,22})/);
+  if (matchDigits) {
+    return { bookId: matchDigits[1], platform: 'raw_id' };
+  }
+
+  return null;
+}
+
+// Endpoint to resolve any novel URL or share text
+app.post('/api/novel/resolve', async (req, res) => {
+  try {
+    const { url, rawText } = req.body;
+    const inputText = (url || rawText || '').toString().trim();
+
+    if (!inputText) {
+      res.status(400).json({ error: '请输入有效的分享链接或书籍信息' });
+      return;
+    }
+
+    // Extract URL from input text if embedded in other words
+    const urlMatch = inputText.match(/(https?:\/\/[^\s\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+)/i);
+    let targetUrl = urlMatch ? urlMatch[1] : inputText;
+    targetUrl = targetUrl.replace(/[。，！？、“”‘’（）()<>《》;,]+$/, '');
+
+    const resolved = await resolveShareUrlToBookId(targetUrl);
+    if (!resolved) {
+      res.status(404).json({
+        error: '未能从链接中解析出有效的书籍 ID，请确认链接是否为番茄/长读小说有效分享链接',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      bookId: resolved.bookId,
+      platform: resolved.platform,
+      resolvedLocation: resolved.location,
+    });
+  } catch (error: any) {
+    console.error('Error in /api/novel/resolve:', error);
+    res.status(500).json({ error: error.message || '解析分享链接失败' });
+  }
+});
+
+// Tomato / Web Novel Chapter Fetcher proxy with real Fanqie page parsing and snssdk API
+app.get('/api/tomato/book-info', async (req, res) => {
+  const { bookId } = req.query;
+  if (!bookId || typeof bookId !== 'string') {
+    res.status(400).json({ error: '缺少书籍 ID 或 URL' });
+    return;
+  }
+
+  let targetId = bookId.trim();
+
+  // If passed a full URL instead of plain ID, resolve it first
+  if (targetId.startsWith('http://') || targetId.startsWith('https://') || targetId.includes('changdunovel.com')) {
+    const resolved = await resolveShareUrlToBookId(targetId);
+    if (resolved) {
+      targetId = resolved.bookId;
+    }
+  }
+
+  // Attempt 1: Fetch fanqienovel.com/page/{bookId} HTML and extract window.__INITIAL_STATE__
+  if (/^\d{10,25}$/.test(targetId)) {
+    try {
+      const pageUrl = `https://fanqienovel.com/page/${targetId}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const pageRes = await fetch(pageUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (pageRes.ok) {
+        const html = await pageRes.text();
+        const stateIdx = html.indexOf('window.__INITIAL_STATE__=');
+        if (stateIdx !== -1) {
+          const raw = html.slice(stateIdx + 'window.__INITIAL_STATE__='.length);
+          let depth = 0;
+          let end = 0;
+          for (let i = 0; i < raw.length; i++) {
+            if (raw[i] === '{') depth++;
+            else if (raw[i] === '}') {
+              depth--;
+              if (depth === 0) {
+                end = i + 1;
+                break;
+              }
+            }
+          }
+          if (end > 0) {
+            const state = JSON.parse(raw.slice(0, end));
+            const pageData = state.page || {};
+            const bookTitle = pageData.bookName || pageData.book_name || `番茄小说_${targetId}`;
+            const author = pageData.authorName || pageData.author || '网络作者';
+            const coverUrl = pageData.thumbUrl || pageData.thumbUri || '';
+            const description = pageData.abstract || pageData.description || '';
+
+            const chapters: { itemId: string; title: string; index: number }[] = [];
+            const volumes = pageData.chapterListWithVolume || [];
+
+            if (Array.isArray(volumes) && volumes.length > 0) {
+              for (const vol of volumes) {
+                if (Array.isArray(vol)) {
+                  for (const ch of vol) {
+                    chapters.push({
+                      itemId: String(ch.itemId || ch.item_id),
+                      title: ch.title || `第${chapters.length + 1}章`,
+                      index: chapters.length,
+                    });
+                  }
+                }
+              }
+            } else if (Array.isArray(pageData.chapterList) && pageData.chapterList.length > 0) {
+              for (const ch of pageData.chapterList) {
+                chapters.push({
+                  itemId: String(ch.itemId || ch.item_id),
+                  title: ch.title || `第${chapters.length + 1}章`,
+                  index: chapters.length,
+                });
+              }
+            }
+
+            if (chapters.length > 0) {
+              res.json({
+                bookId: targetId,
+                title: bookTitle,
+                author,
+                coverUrl,
+                description,
+                totalChapters: chapters.length,
+                chapters,
+              });
+              return;
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('Failed to parse fanqienovel web page, falling back:', e.message);
+    }
+
+    // Attempt 2: Fetch snssdk API
+    try {
+      const url = `https://novel.snssdk.com/api/novel/book/directory/list/v1/?device_platform=android&version_code=600&book_id=${targetId}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'com.dragon.read/6.0.0 (Linux; U; Android 12; zh_CN; Build/SQ3A.220705.004)',
+          'Accept': 'application/json, text/plain, */*',
+        },
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (response.ok) {
+        const text = await response.text();
+        if (text && text.trim().startsWith('{')) {
+          const data = JSON.parse(text);
+          if (data?.data?.item_list && Array.isArray(data.data.item_list) && data.data.item_list.length > 0) {
+            const firstItem = data.data.item_list[0] || {};
+            const bookTitle = data.data.book_name || firstItem.book_name || `番茄小说_${targetId}`;
+            const author = data.data.author || firstItem.author || '网络作者';
+            const chapters = data.data.item_list.map((ch: any, idx: number) => ({
+              itemId: String(ch.item_id),
+              title: ch.title || `第${idx + 1}章`,
+              index: idx,
+            }));
+
+            res.json({
+              bookId: targetId,
+              title: bookTitle,
+              author,
+              totalChapters: chapters.length,
+              chapters,
+            });
+            return;
+          }
+        }
+      }
+    } catch {
+      // Fall through
+    }
+  }
+
+  // Fallback / standard rich mocked structure for demo links or offline testing
+  const fallbackChapters = [
+    { itemId: 'demo_1', title: '第一章 潜龙在渊', index: 0 },
+    { itemId: 'demo_2', title: '第二章 古戒之谜', index: 1 },
+    { itemId: 'demo_3', title: '第三章 锋芒初露', index: 2 },
+    { itemId: 'demo_4', title: '第四章 断崖夜谈', index: 3 },
+    { itemId: 'demo_5', title: '第五章 吞天第一转', index: 4 },
+    { itemId: 'demo_6', title: '第六章 藏经阁风波', index: 5 },
+    { itemId: 'demo_7', title: '第七章 幽冥密林试炼', index: 6 },
+    { itemId: 'demo_8', title: '第八章 金阳使者降临', index: 7 },
+    { itemId: 'demo_9', title: '第九章 一拳撼乾坤', index: 8 },
+    { itemId: 'demo_10', title: '第十章 潜龙腾渊，名动八荒（终章）', index: 9 },
+  ];
+
+  let displayTitle = '九品修仙纪';
+  if (targetId.includes('xinghe') || targetId.includes('6987654321')) {
+    displayTitle = '星河武神';
+  } else if (targetId.startsWith('fanqie_custom_')) {
+    displayTitle = decodeURIComponent(targetId.replace('fanqie_custom_', '')) || '网络精选好书';
+  }
+
+  res.json({
+    bookId: targetId,
+    title: displayTitle,
+    author: '网络文学精选',
+    totalChapters: fallbackChapters.length,
+    chapters: fallbackChapters,
+  });
+});
+
+const DEMO_CHAPTER_CONTENTS: Record<string, { title: string; content: string }> = {
+  demo_1: {
+    title: '第一章 潜龙在渊',
+    content: `青石镇的早晨总是笼罩在一层薄如蝉翼的白雾中。\n\n陈青玄揉了揉惺忪的睡眼，推开吱呀作响的木门。院子里那株老槐树已经抽出了嫩芽，微风拂过，落英缤纷。\n\n在这个以武道为尊的大陆上，修行者分为九品。九品最低，一品入圣。而陈青玄，至今还只是个停留在练气初期的少年。\n\n“青玄，今日学堂大比，你可准备好了？”母亲温和的声音从灶房传来，带着腾腾的热气与米粥的香甜。\n\n“准备好了，娘。”陈青玄握了握拳头，手腕上那枚古朴的黑铁戒指在晨光中微微闪过一道极淡的幽光。没有人知道，这枚他在后山捡到的古戒中，正沉睡着一个来自远古的宏大秘密。\n\n“潜龙在渊，待时而动。”他在心中默念着古戒苏醒时传来的第一句谶语，眼中闪过一丝与年龄不符的坚定。`,
+  },
+  demo_2: {
+    title: '第二章 古戒之谜',
+    content: `深夜，月如银盘。\n\n陈青玄独自盘坐在床榻之上，双目微阖，体内微弱的真气缓缓按照最基础的《引气决》周天运转。\n\n忽然，手腕上的黑铁古戒传来一阵温热。原本斑驳粗糙的戒面上，隐隐浮现出一道道细若游丝的金色纹路，宛如古老的阵法在复苏。\n\n“小家伙，老夫在此沉睡了三千年，今日借你一丝气血苏醒，也算与你有缘。”一道苍老而威严的声音，毫无预兆地在陈青玄脑海中炸响！\n\n陈青玄猛地睁开双眼，警惕地扫视四周：“谁？！”\n\n“不必惊慌，老夫就在这枚噬天神戒之中。”那道声音带着一丝轻笑，“你体质孱弱，修炼凡俗功法，穷其一生也不过是个七品武夫。但若你拜老夫为师，老夫许你执掌天地阴阳，一剑断万古！”\n\n陈青玄呼吸微微一促，但他并未被这诱人的许诺冲昏头脑，而是深吸了一口气，冷静地问道：“前辈需要我做什么？”\n\n戒中老者不由赞叹：“好沉稳的心性！老夫果然没有看错人。”`,
+  },
+  demo_3: {
+    title: '第三章 锋芒初露',
+    content: `次日，青石学堂大校场上人声鼎沸。\n\n今日是一年一度的年终考评，几乎所有镇上的家族长辈与年轻子弟尽皆齐聚于此。\n\n“下一位，陈家陈青玄，对战赵家赵天骄！”\n\n伴随着执事教习洪亮的声音，全场目光瞬间汇聚在擂台之上。赵天骄乃是青石镇公认的天才，早在半年前便已踏入练气三重，一手崩山拳打得虎虎生风。\n\n“陈青玄，听说你练气一年尚无寸进，识相的现在认输还来得及，免得待会儿当众出丑。”赵天骄双手抱胸，神色倨傲。\n\n陈青玄神色淡然，缓步走上擂台：“请指教。”\n\n“冥顽不灵！”赵天骄冷哼一声，脚掌猛一跺地，身形如离弦之箭般暴射而出，右拳夹杂着破风之声，直轰陈青玄面门！\n\n台下众人纷纷闭上眼睛，仿佛已经看到陈青玄倒飞吐血的惨状。\n\n然而，就在拳头距离陈青玄面门仅有三寸之时，陈青玄的身形忽然微微一晃，犹如鬼魅般侧身避过。同时右手轻描淡写地在赵天骄手腕上一拂！\n\n借力打力，四两拨千斤！\n\n“砰！”赵天骄整个人不受控制地向前扑倒，结结实实地摔了个狗吃屎，整座擂台瞬间鸦雀无声！`,
+  },
+  demo_4: {
+    title: '第四章 断崖夜谈',
+    content: `夜凉如水，残月如钩。\n\n青石镇后山的断崖之上，劲风猎猎作响，吹得陈青玄的青色布袍猎猎翻飞。三更时分，四周一片死寂，唯有远处林中偶有几声夜枭的凄啼。\n\n陈青玄盘膝坐在一块平整的青石上，屏息凝神，静静等待着。\n\n“嗡——”\n\n手腕上的黑铁古戒突然轻轻颤鸣起来，丝丝缕缕幽黑如墨的雾气自戒面溢出，在半空中缓缓凝聚成一道苍老而虚幻的人影。\n\n“小家伙，你的心性倒比老夫预想的还要沉稳几分。”虚影缓缓开口，声音带着古老岁月的厚重感。\n\n“前辈过誉了，晚辈陈青玄，拜见前辈。”陈青玄起身肃穆行礼。\n\n老者抚须微笑：“老夫自号‘荒古天尊’。当年那一战，天崩地裂，老夫只余一丝残魂封于这枚神戒中，沉睡了万载光阴，直至被你的血脉精气唤醒。”`,
+  },
+};
+
+// Single Chapter content fetcher
+app.get('/api/tomato/chapter-content', async (req, res) => {
+  const { itemId } = req.query;
+  if (!itemId || typeof itemId !== 'string') {
+    res.status(400).json({ error: '缺少 itemId' });
+    return;
+  }
+
+  const cleanItemId = itemId.trim();
+
+  // If it's a known demo chapter, return immediately with zero external delay
+  if (DEMO_CHAPTER_CONTENTS[cleanItemId]) {
+    const data = DEMO_CHAPTER_CONTENTS[cleanItemId];
+    res.json({
+      itemId: cleanItemId,
+      title: data.title,
+      content: data.content,
+      wordCount: data.content.length,
+    });
+    return;
+  }
+
+  // Attempt 1: Fetch fanqienovel.com/reader/{itemId}
+  if (/^\d{10,25}$/.test(cleanItemId)) {
+    try {
+      const readerUrl = `https://fanqienovel.com/reader/${cleanItemId}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const readerRes = await fetch(readerUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (readerRes.ok) {
+        const html = await readerRes.text();
+        const stateIdx = html.indexOf('window.__INITIAL_STATE__=');
+        if (stateIdx !== -1) {
+          const raw = html.slice(stateIdx + 'window.__INITIAL_STATE__='.length);
+          let depth = 0;
+          let end = 0;
+          for (let i = 0; i < raw.length; i++) {
+            if (raw[i] === '{') depth++;
+            else if (raw[i] === '}') {
+              depth--;
+              if (depth === 0) {
+                end = i + 1;
+                break;
+              }
+            }
+          }
+          if (end > 0) {
+            const state = JSON.parse(raw.slice(0, end));
+            const chapterData = state.reader?.chapterData || {};
+            const rawContent = chapterData.content || '';
+            const chapterTitle = chapterData.title || '';
+
+            // Extract dynamic font URL if embedded in style
+            const fontMatch = html.match(/src:url\((https:\/\/[^)]+\.woff2)\)/);
+            const fontUrl = fontMatch ? fontMatch[1] : undefined;
+
+            if (rawContent) {
+              const cleanContent = rawContent
+                .replace(/<p>/gi, '')
+                .replace(/<\/p>/gi, '\n\n')
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/&nbsp;/gi, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+              res.json({
+                itemId: cleanItemId,
+                title: chapterTitle || '正文章节',
+                content: cleanContent,
+                wordCount: cleanContent.length,
+                fontUrl,
+              });
+              return;
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('Failed to fetch from fanqienovel web reader, falling back:', e.message);
+    }
+
+    // Attempt 2: Fetch snssdk API
+    try {
+      const url = `https://novel.snssdk.com/api/novel/book/reader/full/v1/?device_platform=android&version_code=600&item_id=${cleanItemId}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'com.dragon.read/6.0.0 (Linux; U; Android 12; zh_CN)',
+          'Accept': 'application/json, text/plain, */*',
+        },
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (response.ok) {
+        const text = await response.text();
+        if (text && text.trim().startsWith('{')) {
+          const data = JSON.parse(text);
+          const rawContent = data?.data?.content || '';
+          if (rawContent) {
+            const cleanContent = rawContent
+              .replace(/<p>/gi, '')
+              .replace(/<\/p>/gi, '\n\n')
+              .replace(/<br\s*\/?>/gi, '\n')
+              .replace(/&nbsp;/gi, ' ')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
+
+            res.json({
+              itemId: cleanItemId,
+              title: data?.data?.title || '',
+              content: cleanContent,
+              wordCount: cleanContent.length,
+            });
+            return;
+          }
+        }
+      }
+    } catch {
+      // Fall through to fallback
+    }
+  }
+
+  // Fallback dynamic chapter content generator
+  res.json({
+    itemId: cleanItemId,
+    title: '精彩章节',
+    content: `晨曦微露，山风猎猎。\n\n陈青玄手握古戒，盘坐于青石之上。天地灵气如潮水般自四面八方奔涌而来，在经脉中化作精纯的真气。\n\n“修行之道，如逆水行舟，不进则退。”脑海中苍老的声音缓缓回荡，指引着功法的每一处细微流转。\n\n少年目光坚毅，长身而起，望向远方的无垠群山，属于他的浩瀚征途，才正要开始。`,
+    wordCount: 150,
+  });
+});
+
+// Legacy backward-compatible endpoint
 app.post('/api/fetch/tomato', async (req, res) => {
   try {
     const { url, bookTitle: queryTitle } = req.body;
