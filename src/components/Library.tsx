@@ -65,6 +65,14 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
     setTimeout(() => setToastMessage(null), 2500);
   };
 
+  const handleOpenBookSafely = (book: Book) => {
+    if (book.sourceType === 'tomato' && book.fetchStatus?.status !== 'READY') {
+      showToast(book.fetchStatus?.error || '这本网络小说尚未完整导入，暂时不能阅读');
+      return;
+    }
+    onOpenBook(book);
+  };
+
   const loadBooks = async () => {
     setLoading(true);
     await seedInitialDataIfEmpty();
@@ -336,7 +344,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                       <Sparkles className="w-4 h-4 text-[#da7756]" />
                       <div>
                         <div className="font-semibold">番茄 / 网络小说链接</div>
-                        <div className="text-[10px] text-stone-500">支持流式边下边读</div>
+                        <div className="text-[10px] text-stone-500">后台完整导入后阅读</div>
                       </div>
                     </button>
                   </div>
@@ -432,7 +440,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               return (
                 <div
                   key={book.id}
-                  onClick={() => onOpenBook(book)}
+                  onClick={() => handleOpenBookSafely(book)}
                   className="group relative flex flex-col cursor-pointer select-none"
                 >
                   {/* Book Typographic Milk-White Minimalist Cover */}
@@ -549,7 +557,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               return (
                 <div
                   key={book.id}
-                  onClick={() => onOpenBook(book)}
+                  onClick={() => handleOpenBookSafely(book)}
                   className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#e8e6df] shadow-xs hover:shadow-md transition flex items-center justify-between gap-4 cursor-pointer"
                 >
                   <div className="flex items-center gap-3.5 truncate">
