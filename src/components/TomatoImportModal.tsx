@@ -49,6 +49,20 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
     }
   };
 
+  const handleRetryImport = async () => {
+    if (!inputUrl.trim() || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const book = await startTomatoNovelImport(inputUrl.trim(), (p) => setProgress(p));
+      setImportedBook(book);
+    } catch (err: any) {
+      setError(err.message || '重试导入失败，请稍后再试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleExportTxt = () => {
     if (!importedBook) return;
     setError(null);
@@ -212,7 +226,17 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
                 当前进度：{progress.currentChapterTitle}
               </div>
 
-              {/* Actions: Instant Read & Download TXT */}
+              {/* Actions: only a fully READY book can be read or exported */}
+              {progress.error && (
+                <button
+                  type="button"
+                  onClick={handleRetryImport}
+                  disabled={loading}
+                  className="w-full px-4 py-2 text-xs font-medium bg-white dark:bg-stone-800 hover:bg-[#e8e6df]/50 text-[#da7756] border border-[#e8e6df] dark:border-stone-700 rounded-xl transition disabled:opacity-50"
+                >
+                  {loading ? '正在重试...' : '重试导入'}
+                </button>
+              )}
               <div className="pt-2 flex flex-col sm:flex-row gap-2">
                 <button
                   type="button"
