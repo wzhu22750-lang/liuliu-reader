@@ -33,6 +33,7 @@ export interface Book {
   sourceType: SourceType;
   sourceUrl?: string;
   totalChapters: number;
+  totalWords?: number; // total word count across all chapters
   chapters: Chapter[];
   progress: BookProgress;
   createdAt: number;
