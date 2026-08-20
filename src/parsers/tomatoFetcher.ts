@@ -1,5 +1,6 @@
 import { Book, Chapter } from '../types';
 import { saveBook, getBookById } from '../db/indexedDB';
+import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
 
 export interface TomatoChapterMeta {
   itemId: string;
@@ -15,6 +16,16 @@ export interface TomatoBookInfo {
   description?: string;
   totalChapters: number;
   chapters: TomatoChapterMeta[];
+}
+
+export interface TomatoChapterContent {
+  title: string;
+  content: string;
+  wordCount?: number;
+  fontUrl?: string;
+  decodeStatus?: TomatoDecodeStatus;
+  decodeMappingId?: string;
+  decodeUnknownCount?: number;
 }
 
 export interface TomatoFetchProgress {
@@ -162,13 +173,27 @@ export async function fetchTomatoBookInfo(bookIdOrUrl: string): Promise<TomatoBo
  */
 export async function fetchTomatoChapterContent(
   itemId: string
-): Promise<{ title: string; content: string; wordCount?: number; fontUrl?: string }> {
+): Promise<TomatoChapterContent> {
   const res = await fetch(`/api/tomato/chapter-content?itemId=${encodeURIComponent(itemId)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || '获取章节正文失败');
   }
-  return res.json();
+  const payload = await res.json() as TomatoChapterContent;
+  const decoded = decodeTomatoText(payload.content || '');
+  if (decoded.status === 'partial' || decoded.status === 'unsupported') {
+    throw new Error(
+      `章节“${payload.title || itemId}”包含 ${decoded.unknownCount} 个未解码字符，已停止导入，避免保存乱码。`
+    );
+  }
+  return {
+    ...payload,
+    content: decoded.content,
+    wordCount: decoded.content.length,
+    decodeStatus: decoded.status,
+    decodeMappingId: decoded.mappingId,
+    decodeUnknownCount: decoded.unknownCount,
+  };
 }
 
 /**
@@ -183,7 +208,14 @@ export function downloadNovelAsTxt(
 
   for (let i = 0; i < chapters.length; i++) {
     const ch = chapters[i];
-    fileContent += `${ch.title}\n\n${ch.content}\n\n${'-'.repeat(24)}\n\n`;
+    const decoded = decodeTomatoText(ch.content);
+    if (decoded.status === 'partial' || decoded.status === 'unsupported') {
+      throw new Error(
+        `第 ${i + 1} 章仍包含 ${decoded.unknownCount} 个未解码字符，已阻止导出乱码文件。`
+      );
+    }
+    assertTomatoTextExportable(decoded.content);
+    fileContent += `${ch.title}\n\n${decoded.content}\n\n${'-'.repeat(24)}\n\n`;
   }
 
   const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
