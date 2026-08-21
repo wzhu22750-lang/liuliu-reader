@@ -107,3 +107,15 @@
   .ink-reader .border-\[\#da7756\], .ink-reader .ring-\[\#da7756\] { border-color: #111 !important; --tw-ring-color: #111 !important; }
   @media (min-width: 640px) { .ink-page-header { padding-left: 32px; padding-right: 32px; } .ink-page-main { padding-left: 32px; padding-right: 32px; } .ink-bottom-nav { position: static; max-width: 780px; margin: 12px auto 0; height: 58px; border: 1px solid var(--ink-line); } }
 }
+
+
+@layer components {
+  .ink-excerpts { max-width: 780px; padding-bottom: 92px; font-family: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Noto Serif SC', serif; color: #111; }
+  .ink-excerpts .rounded-3xl, .ink-excerpts .rounded-2xl, .ink-excerpts .rounded-xl, .ink-excerpts .rounded-lg { border-radius: 2px !important; }
+  .ink-excerpts .shadow-md, .ink-excerpts .shadow-xs { box-shadow: none !important; }
+  .ink-excerpts .bg-\[\#da7756\]\/10, .ink-excerpts .bg-\[\#da7756\]\/20 { background-color: #f0f0ed !important; }
+  .ink-excerpts .text-\[\#da7756\], .ink-excerpts .text-\[\#ff5f38\] { color: #111 !important; }
+  .ink-excerpts .border-\[\#da7756\] { border-color: #111 !important; }
+  .ink-excerpts > div:first-child { min-height: 104px; align-items: end; }
+  .ink-excerpts h1 { font-size: 28px; font-weight: 800; letter-spacing: .05em; }
+}

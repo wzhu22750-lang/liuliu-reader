@@ -78,6 +78,7 @@ export default function App() {
           <ExcerptsView
             onOpenBookToChapter={handleOpenBookToChapter}
             onBackToLibrary={() => setCurrentView('library')}
+            theme={theme}
           />
         </div>
       )}

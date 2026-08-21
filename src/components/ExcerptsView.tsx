@@ -13,7 +13,7 @@ import {
   BookOpen,
   Sparkles,
 } from 'lucide-react';
-import { Excerpt, Book } from '../types';
+import { Excerpt, Book, ReaderSettings } from '../types';
 import {
   getAllExcerpts,
   deleteExcerpt,
@@ -24,9 +24,10 @@ import {
 interface Props {
   onOpenBookToChapter?: (bookId: string, chapterIndex: number) => void;
   onBackToLibrary: () => void;
+  theme?: ReaderSettings['theme'];
 }
 
-export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLibrary }) => {
+export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLibrary, theme }) => {
   const [excerpts, setExcerpts] = useState<Excerpt[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBookFilter, setSelectedBookFilter] = useState<string>('all');
@@ -101,7 +102,7 @@ export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLib
   });
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200 font-sans">
+    <div className={`${theme === 'ink' ? 'ink-excerpts' : ''} max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200 font-sans`}>
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#e8e6df] dark:border-stone-800">
         <div className="flex items-center gap-3">
