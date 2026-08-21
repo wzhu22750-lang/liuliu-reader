@@ -353,7 +353,7 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts, theme, o
     },
   };
 
-  const currentTheme = themeClasses[settings.theme] || themeClasses.light;
+  const currentTheme = themeClasses[settings.theme] || themeClasses.claude;
   const isBookmarkedCurrent = bookmarks.some((b) => b.chapterIndex === currentChapterIndex);
 
   // Render paragraphs with highlight styling
