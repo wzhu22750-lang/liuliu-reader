@@ -31,7 +31,7 @@
 - 返回值统一转换为溜溜读书的 `Book`、`Chapter` 模型。
 - 只有所有章节正文成功返回后才写入 IndexedDB，保留原有的原子导入行为。
 
-当前仍未完成的是 Android APK 构建：本仓库目前只有 React/Vite 工程，没有 `src-tauri`、Cargo 工程或 Android Gradle 工程。因此现在可以验证前端编译和 adapter 单测，但不能在这个仓库直接产出最终 APK。最终 APK 需要把本分支的前端资源接入原番茄器 Tauri 工程后再构建。
+当前已完成一次离线 APK 整合构建。由于没有原始 Rust/Tauri 源码，不能重新编译 native library；实际方案是保留原 APK 的 Java/Tauri/Wry 类、Rust JNI library 和 dispatch IPC，向 APK `assets/` 注入 React/Vite 产物，并在 `RustWebViewClient` 的 smali 中将 WebView 静态资源请求切换到 APK asset loader。构建脚本位于 `scripts/build-liuli-android-apk.sh`。这证明 APK 可以被重打包、签名和离线解析，但不等同于 Android 真机运行验证。
 
 ## 验证结果
 
@@ -103,3 +103,13 @@ save_download_preferences
 ```
 
 这些 action 都通过同一个 Tauri command `dispatch` 调用，不是 27 个独立 command。
+
+
+## 离线 APK 构建结果
+
+- 输出：`/Users/kuangqie/Documents/VibeCoding/番茄器/番茄器-liuli-reader.apk`
+- 包名与入口保持原版：`com.pofl.fanqienoveldownloader` / `com.pofl.fanqienoveldownloader.MainActivity`
+- 版本：`2026.7.26-709-liuli`，versionCode `100635`
+- 原始 `libfanqie_novel_downloader_tauri.so` 原样保留，重打包前后 SHA-256 一致。
+- APK 使用本地 debug keystore 签名，apksigner 已通过 v2/v3 校验。
+- 未使用 adb；当前未连接安卓设备，尚未进行真机安装和运行验证。
