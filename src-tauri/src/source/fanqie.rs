@@ -5,10 +5,10 @@
 //! 那是受保护的客户端协议，应由用户自有授权服务或独立 native crate 注入。
 
 use regex::Regex;
-use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
 use crate::models::SearchHit;
+use serde_json::Value;
 
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -31,14 +31,12 @@ pub struct BookInfo {
 
 #[derive(Debug, Clone)]
 pub struct ChapterSnapshot {
-    #[allow(dead_code)]
     pub item_id: String,
     pub title: String,
     pub content: String,
     pub expected_word_count: Option<i64>,
     pub is_chapter_lock: bool,
     pub font_url: Option<String>,
-    #[allow(dead_code)]
     pub provider: String,
 }
 
@@ -368,6 +366,60 @@ fn build_provider_url(endpoint: &str, book_id: &str, item_id: &str, index: i64) 
     url.to_string()
 }
 
+fn first_string(value: &Value, keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Some(v) = value.get(*key) {
+            if let Some(s) = v.as_str() {
+                if !s.is_empty() {
+                    return Some(s.to_string());
+                }
+            }
+            if let Some(n) = v.as_i64() {
+                return Some(n.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn first_i64(value: &Value, keys: &[&str]) -> Option<i64> {
+    for key in keys {
+        if let Some(v) = value.get(*key) {
+            if let Some(n) = v.as_i64() {
+                return Some(n);
+            }
+            if let Some(s) = v.as_str() {
+                if let Ok(n) = s.parse() {
+                    return Some(n);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn capture_id(pattern: &str, hay: &str) -> Option<String> {
+    Regex::new(pattern)
+        .ok()?
+        .captures(hay)
+        .and_then(|c| c.get(1).map(|m| m.as_str().to_string()))
+}
+
+fn capture_url(input: &str) -> Option<String> {
+    Regex::new(r"https?://[^\s\u{4e00}-\u{9fff}]+")
+        .ok()?
+        .find(input)
+        .map(|m| {
+            m.as_str()
+                .trim_end_matches(|c: char| matches!(c, '。' | '，' | '！' | '？' | '、' | ')' | '(' | '>' | '<' | ';' | ','))
+                .to_string()
+        })
+}
+
+fn urlencoding_lite(value: &str) -> String {
+    url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
+}
+
 fn extract_initial_state(html: &str) -> AppResult<Value> {
     let marker = "window.__INITIAL_STATE__=";
     let start = html
@@ -408,7 +460,7 @@ fn extract_initial_state(html: &str) -> AppResult<Value> {
     Err("INITIAL_STATE JSON 不完整".into())
 }
 
-fn parse_search_hits(html: &str) -> Vec<SearchHit> {
+pub fn parse_search_hits(html: &str) -> Vec<SearchHit> {
     let re = Regex::new(r#"/page/(\d{10,25})"#).unwrap();
     let mut hits = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -469,58 +521,4 @@ fn push_chapter(chapters: &mut Vec<ChapterMeta>, chapter: &Value) {
         title: first_string(chapter, &["title"]).unwrap_or_else(|| format!("第{}章", index + 1)),
         index,
     });
-}
-
-fn first_string(value: &Value, keys: &[&str]) -> Option<String> {
-    for key in keys {
-        if let Some(v) = value.get(*key) {
-            if let Some(s) = v.as_str() {
-                if !s.is_empty() {
-                    return Some(s.to_string());
-                }
-            }
-            if let Some(n) = v.as_i64() {
-                return Some(n.to_string());
-            }
-        }
-    }
-    None
-}
-
-fn first_i64(value: &Value, keys: &[&str]) -> Option<i64> {
-    for key in keys {
-        if let Some(v) = value.get(*key) {
-            if let Some(n) = v.as_i64() {
-                return Some(n);
-            }
-            if let Some(s) = v.as_str() {
-                if let Ok(n) = s.parse() {
-                    return Some(n);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn capture_id(pattern: &str, hay: &str) -> Option<String> {
-    Regex::new(pattern)
-        .ok()?
-        .captures(hay)
-        .and_then(|c| c.get(1).map(|m| m.as_str().to_string()))
-}
-
-fn capture_url(input: &str) -> Option<String> {
-    Regex::new(r"https?://[^\s\u{4e00}-\u{9fff}]+")
-        .ok()?
-        .find(input)
-        .map(|m| {
-            m.as_str()
-                .trim_end_matches(|c: char| matches!(c, '。' | '，' | '！' | '？' | '、' | ')' | '(' | '>' | '<' | ';' | ','))
-                .to_string()
-        })
-}
-
-fn urlencoding_lite(value: &str) -> String {
-    url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
 }

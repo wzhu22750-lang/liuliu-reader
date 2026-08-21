@@ -31,6 +31,7 @@ html-escape = "0.2"
 # 番茄官方签名 + 解密链路
 sm3 = "0.4"            # SM3 国密哈希
 md-5 = "0.10"          # MD5
+sha2 = "0.10"          # X-Argus 查询/正文哈希
 aes = "0.8"            # AES-128
 cbc = { version = "0.1", features = ["alloc", "block-padding"] }  # CBC + 填充模式
 block-padding = "0.3"  # PKCS#7

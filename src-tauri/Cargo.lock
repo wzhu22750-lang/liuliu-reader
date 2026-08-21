@@ -1942,6 +1942,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "sm3",
  "tauri",
  "tauri-build",
