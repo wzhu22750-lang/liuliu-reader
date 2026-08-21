@@ -15,8 +15,12 @@ import {
   DownloadCloud,
   CheckCircle2,
   Library as LibraryIcon,
+  Home,
+  UserRound,
+  SlidersHorizontal,
+  Upload,
 } from 'lucide-react';
-import { Book } from '../types';
+import { Book, ReaderSettings } from '../types';
 import {
   getAllBooks,
   saveBook,
@@ -34,9 +38,11 @@ import { SettingsModal } from './SettingsModal';
 interface Props {
   onOpenBook: (book: Book) => void;
   onOpenExcerpts: () => void;
+  theme: ReaderSettings['theme'];
+  onThemeChange: (theme: ReaderSettings['theme']) => void | Promise<void>;
 }
 
-export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
+export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts, theme, onThemeChange }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -225,6 +231,106 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
     for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
     return themes[sum % themes.length];
   };
+
+  if (theme === 'ink') {
+    return (
+      <div className="ink-app min-h-screen bg-white text-neutral-950 pb-24">
+        {toastMessage && (
+          <div className="ink-toast fixed top-5 left-1/2 z-50 -translate-x-1/2 px-4 py-2 text-xs">
+            {toastMessage}
+          </div>
+        )}
+
+        <header className="ink-page-header">
+          <div>
+            <p className="ink-eyebrow">LIULIU READER</p>
+            <h1>书架</h1>
+            <p className="ink-header-note">共 {books.length} 本书 · 安静阅读，随时继续</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" className="ink-icon-button" onClick={() => setShowImportMenu((value) => !value)} aria-label="导入书籍">
+              <Upload className="w-5 h-5" />
+            </button>
+            <button type="button" className="ink-icon-button" onClick={() => setShowSettings(true)} aria-label="我的与设置">
+              <SlidersHorizontal className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {showImportMenu && (
+          <div className="ink-import-menu">
+            <label className="ink-action-row">
+              <FileText className="w-5 h-5" />
+              <span><strong>导入 TXT</strong><small>按目录规则拆分为章节</small></span>
+              <input type="file" accept=".txt,text/plain" className="hidden" onChange={handleTxtFileUpload} />
+            </label>
+            <label className="ink-action-row">
+              <BookOpen className="w-5 h-5" />
+              <span><strong>导入 EPUB</strong><small>解析本地电子书文件</small></span>
+              <input type="file" accept=".epub,application/epub+zip" className="hidden" onChange={handleEpubFileUpload} />
+            </label>
+            <button type="button" className="ink-action-row" onClick={() => { setShowTomatoModal(true); setShowImportMenu(false); }}>
+              <DownloadCloud className="w-5 h-5" />
+              <span><strong>导入番茄小说</strong><small>从作品链接完整导入</small></span>
+            </button>
+          </div>
+        )}
+
+        <main className="ink-page-main">
+          <div className="ink-search-line">
+            <Search className="w-4 h-4" />
+            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索书名或作者" aria-label="搜索书名或作者" />
+          </div>
+
+          <section className="ink-section">
+            <div className="ink-section-heading"><span>正在阅读</span><span>{filteredBooks.length} 本</span></div>
+            {loading ? (
+              <div className="ink-empty">正在整理书架…</div>
+            ) : filteredBooks.length === 0 ? (
+              <div className="ink-empty">没有找到匹配的书籍</div>
+            ) : (
+              <div className="ink-book-list">
+                {filteredBooks.map((book) => {
+                  const progress = book.progress?.percentage || 0;
+                  return (
+                    <article key={book.id} className="ink-book-row">
+                      <button type="button" className="ink-book-cover" onClick={() => handleOpenBookSafely(book)} aria-label={`阅读《${book.title}》`}>
+                        <span>{book.title.slice(0, 1)}</span>
+                      </button>
+                      <button type="button" className="ink-book-copy" onClick={() => handleOpenBookSafely(book)}>
+                        <strong>{book.title}</strong>
+                        <span>{book.author || '佚名'} · {book.chapters.length} 章</span>
+                        <small>{book.progress?.chapterTitle || '从第一章开始'} · 已读 {progress}%</small>
+                      </button>
+                      <button type="button" className="ink-row-more" onClick={() => setActiveMenuBookId(activeMenuBookId === book.id ? null : book.id)} aria-label={`管理《${book.title}》`}>
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                      {activeMenuBookId === book.id && (
+                        <div className="ink-book-actions">
+                          <button type="button" onClick={() => handleResetProgress(book)}><RotateCcw className="w-4 h-4" /> 从头阅读</button>
+                          <button type="button" onClick={() => handleDeleteBook(book)}><Trash2 className="w-4 h-4" /> 删除书籍</button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
+
+        <nav className="ink-bottom-nav" aria-label="主导航">
+          <button type="button" onClick={() => showToast('首页内容正在整理')}><Home className="w-6 h-6" /><span>首页</span></button>
+          <button type="button" className="is-active"><LibraryIcon className="w-6 h-6" /><span>书架</span></button>
+          <button type="button" onClick={() => setShowSettings(true)}><UserRound className="w-6 h-6" /><span>我的</span></button>
+        </nav>
+
+        {txtModalData && <TxtSplitPreviewModal rawText={txtModalData.rawText} fileName={txtModalData.fileName} initialResult={txtModalData.initialResult} onConfirm={handleConfirmTxtImport} onCancel={() => setTxtModalData(null)} />}
+        {showTomatoModal && <TomatoImportModal onSuccess={(book, openDirectly) => { setShowTomatoModal(false); loadBooks(); if (openDirectly) onOpenBook(book); }} onClose={() => { setShowTomatoModal(false); loadBooks(); }} />}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onSettingsUpdated={loadBooks} theme={theme} onThemeChange={onThemeChange} />}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f4ee] text-[#141413] transition-colors duration-200">
@@ -646,6 +752,8 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
         <SettingsModal
           onClose={() => setShowSettings(false)}
           onSettingsUpdated={() => loadBooks()}
+          theme={theme}
+          onThemeChange={onThemeChange}
         />
       )}
     </div>
