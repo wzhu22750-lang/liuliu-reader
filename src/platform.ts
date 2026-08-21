@@ -1,5 +1,10 @@
 export function isTauri(): boolean {
-  return typeof window !== 'undefined' && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
+  if (typeof window === 'undefined') return false;
+  const root = window as unknown as {
+    __TAURI_INTERNALS__?: unknown;
+    __TAURI__?: unknown;
+  };
+  return Boolean(root.__TAURI_INTERNALS__ || root.__TAURI__);
 }
 
 export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

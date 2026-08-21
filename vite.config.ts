@@ -15,6 +15,12 @@ export default defineConfig(() => {
     server: {
       port: Number(process.env.TAURI_DEV_PORT || process.env.PORT || 1420),
       strictPort: true,
+      proxy: {
+        '/api': {
+          target: `http://127.0.0.1:${Number(process.env.API_PORT || 3000)}`,
+          changeOrigin: true,
+        },
+      },
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },

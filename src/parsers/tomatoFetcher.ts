@@ -3,6 +3,22 @@ import { saveBook, getBookById } from '../db/store';
 import { isTauri, invoke } from '../platform';
 import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
 
+async function parseJsonResponse<T>(response: Response, context: string): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  const trimmed = text.trim();
+  if (!contentType.toLowerCase().includes('application/json') && /^<!doctype\s+html|^<html[\s>]/i.test(trimmed)) {
+    throw new Error(
+      `${context}返回了 HTML 页面而不是 JSON。请确认当前使用的是 Tauri 应用，或先启动后端：npm run dev`
+    );
+  }
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    throw new Error(`${context}返回了无效 JSON（HTTP ${response.status}）`);
+  }
+}
+
 export interface TomatoChapterMeta {
   itemId: string;
   title: string;
@@ -131,7 +147,7 @@ export async function resolveNovelShareUrl(rawUrlOrText: string): Promise<string
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data = await parseJsonResponse<{ success?: boolean; bookId?: string }>(res, '分享链接解析接口');
         if (data.success && data.bookId) {
           return data.bookId;
         }
@@ -168,9 +184,9 @@ export async function fetchTomatoBookInfo(bookIdOrUrl: string): Promise<TomatoBo
   const res = await fetch(`/api/tomato/book-info?bookId=${encodeURIComponent(bookIdOrUrl)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '获取书籍目录失败，请检查链接有效性');
+    throw new Error(err.error || `获取书籍目录失败（HTTP ${res.status}），请检查链接有效性`);
   }
-  return res.json();
+  return parseJsonResponse<TomatoBookInfo>(res, '书籍目录接口');
 }
 
 /**
@@ -188,7 +204,7 @@ export async function fetchTomatoChapterContent(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const res = await fetch(`/api/tomato/chapter-content?bookId=${encodeURIComponent(bookId)}&itemId=${encodeURIComponent(itemId)}&chapterIndex=${chapterIndex}`);
-      const payload = await res.json().catch(() => ({}));
+      const payload = await parseJsonResponse<Partial<TomatoChapterContent> & { error?: string; hasMore?: boolean; nextCursor?: unknown; preview?: boolean }>(res, '章节正文接口');
       if (!res.ok) throw new Error(payload.error || '获取章节正文失败');
 
       const content = String(payload.content || '').trim();
@@ -209,6 +225,7 @@ export async function fetchTomatoChapterContent(
       assertTomatoTextExportable(decoded.content);
       return {
         ...payload,
+        title: String(payload.title || itemId),
         content: decoded.content,
         wordCount: decoded.content.length,
         decodeStatus: decoded.status,
