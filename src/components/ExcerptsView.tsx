@@ -102,7 +102,7 @@ export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLib
   });
 
   return (
-    <div className={`${theme === 'ink' ? 'ink-excerpts' : ''} max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200 font-sans`}>
+    <div className={`${theme === 'ink' || theme === 'claude' ? `ink-excerpts ${theme === 'claude' ? 'claude-excerpts' : ''}` : ''} max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200 font-sans`}>
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#e8e6df] dark:border-stone-800">
         <div className="flex items-center gap-3">

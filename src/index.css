@@ -119,3 +119,59 @@
   .ink-excerpts > div:first-child { min-height: 104px; align-items: end; }
   .ink-excerpts h1 { font-size: 28px; font-weight: 800; letter-spacing: .05em; }
 }
+
+@layer components {
+  /* Claude uses the identical reader-first layout, with a warmer library-like material system. */
+  .claude-app,
+  .claude-settings-page {
+    --ink-paper: #f7f3ea;
+    --ink-soft: #ece3d5;
+    --ink-line: #d8ccbd;
+    --ink-copy: #31271f;
+    --ink-muted: #78695d;
+    background: var(--ink-paper);
+    color: var(--ink-copy);
+    font-family: ui-serif, Georgia, Cambria, 'Times New Roman', 'Songti SC', 'STSong', serif;
+  }
+
+  .claude-app .ink-page-header,
+  .claude-settings-page .ink-page-header { border-color: var(--ink-line); }
+  .claude-app .ink-search-line { border-color: #6c5140; }
+  .claude-app .ink-book-list,
+  .claude-app .ink-section-heading,
+  .claude-app .ink-book-row,
+  .claude-settings-page .ink-settings-group,
+  .claude-settings-page .ink-setting-row { border-color: var(--ink-line); }
+  .claude-app .ink-book-cover { border-color: #6c5140; background: #fffdf8; color: #6c5140; }
+  .claude-app .ink-book-copy,
+  .claude-app .ink-action-row,
+  .claude-settings-page .ink-setting-row { color: var(--ink-copy); }
+  .claude-app .ink-book-copy span { color: #5a493d; }
+  .claude-app .ink-row-more { color: #78695d; }
+  .claude-app .ink-bottom-nav { border-color: #c7b7a7; background: #f7f3ea; }
+  .claude-app .ink-bottom-nav button { color: #8a796a; }
+  .claude-app .ink-bottom-nav button.is-active { color: #6c5140; }
+  .claude-app .ink-toast { background: #6c5140; }
+  .claude-settings-page .ink-theme-row select { color: #fffaf2; background: #6c5140; }
+  .claude-settings-page .ink-setting-row input[type='checkbox']:checked { background: #6c5140; border-color: #6c5140; }
+  .claude-settings-page .ink-book-actions button,
+  .claude-settings-page .ink-advanced-actions button,
+  .claude-settings-page .ink-backup-actions button,
+  .claude-settings-page .ink-backup-actions label,
+  .claude-settings-page .ink-advanced-toggle { border-color: #6c5140; color: #4b382c; background: #fffaf2; }
+  .claude-settings-page .ink-advanced-toggle { background: #ece3d5; border-color: #d8ccbd; }
+  .claude-settings-page .ink-advanced-panel input:not([type='file']) { border-color: #6c5140; color: #31271f; }
+
+  .claude-reader { background: #f7f3ea !important; color: #31271f !important; font-family: ui-serif, Georgia, Cambria, 'Times New Roman', 'Songti SC', 'STSong', serif; }
+  .claude-reader .text-\[\#141413\], .claude-reader .text-\[\#da7756\], .claude-reader .text-\[\#cc7d5e\] { color: #31271f !important; }
+  .claude-reader .bg-white, .claude-reader .bg-\[\#f5f4ee\] { background-color: #f7f3ea !important; }
+  .claude-reader .border-\[\#e8e6df\] { border-color: #d8ccbd !important; }
+  .claude-reader .bg-\[\#da7756\], .claude-reader .bg-\[\#da7756\]\/10, .claude-reader .bg-\[\#da7756\]\/20 { background-color: #eadbca !important; }
+  .claude-reader .border-\[\#da7756\], .claude-reader .ring-\[\#da7756\] { border-color: #6c5140 !important; --tw-ring-color: #6c5140 !important; }
+
+  .claude-excerpts { background: #f7f3ea; color: #31271f; }
+  .claude-excerpts .bg-white, .claude-excerpts .bg-\[\#f5f4ee\] { background-color: #fffaf2 !important; }
+  .claude-excerpts .border-\[\#e8e6df\] { border-color: #d8ccbd !important; }
+  .claude-excerpts .text-\[\#141413\], .claude-excerpts .text-\[\#da7756\] { color: #31271f !important; }
+  .claude-excerpts .border-\[\#da7756\] { border-color: #6c5140 !important; }
+}

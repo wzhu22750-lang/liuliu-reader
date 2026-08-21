@@ -232,9 +232,9 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts, theme, on
     return themes[sum % themes.length];
   };
 
-  if (theme === 'ink') {
+  if (theme === 'ink' || theme === 'claude') {
     return (
-      <div className="ink-app min-h-screen bg-white text-neutral-950 pb-24">
+      <div className={`${theme === 'claude' ? 'claude-app' : 'ink-app'} min-h-screen pb-24`}>
         {toastMessage && (
           <div className="ink-toast fixed top-5 left-1/2 z-50 -translate-x-1/2 px-4 py-2 text-xs">
             {toastMessage}

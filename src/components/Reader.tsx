@@ -406,7 +406,7 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts, theme, o
   return (
     <div
       data-reader-theme={settings.theme}
-      className={`fixed inset-0 z-30 flex flex-col ${currentTheme.bg} ${currentTheme.text} select-none transition-colors duration-200 overflow-hidden font-serif ${settings.theme === 'ink' ? 'ink-reader' : ''}`}
+      className={`fixed inset-0 z-30 flex flex-col ${currentTheme.bg} ${currentTheme.text} select-none transition-colors duration-200 overflow-hidden font-serif ${settings.theme === 'ink' || settings.theme === 'claude' ? `ink-reader ${settings.theme === 'claude' ? 'claude-reader' : ''}` : ''}`}
     >
       {/* Toast Notification */}
       {toastMessage && (

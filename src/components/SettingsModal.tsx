@@ -140,7 +140,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
     reader.readAsText(file);
   };
 
-  if (theme === 'ink' && readerSettings) {
+  if ((theme === 'ink' || theme === 'claude') && readerSettings) {
     const selectTheme = async (nextTheme: ReaderSettings['theme']) => {
       const next = { ...readerSettings, theme: nextTheme };
       setReaderSettings(next);
@@ -149,7 +149,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
     };
 
     return (
-      <section className="ink-settings-page fixed inset-0 z-50 overflow-y-auto bg-white text-neutral-950">
+      <section className={`${theme === 'claude' ? 'claude-settings-page' : 'ink-settings-page'} fixed inset-0 z-50 overflow-y-auto`}>
         <header className="ink-page-header">
           <div>
             <p className="ink-eyebrow">LIULIU READER</p>
