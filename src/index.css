@@ -209,3 +209,20 @@
   .claude-excerpts .ink-excerpt-editor button:last-child { border-color: #6c5140; background: #6c5140; }
   .ink-excerpts-page .ink-bottom-nav { grid-template-columns: repeat(2, 1fr); }
 }
+
+@layer components {
+  /* Settings is a full screen destination, never a translucent layer above the shelf. */
+  .ink-settings-page,
+  .claude-settings-page {
+    width: 100%;
+    min-height: 100dvh;
+    isolation: isolate;
+    contain: paint;
+    background-color: var(--ink-paper);
+    background-image: none;
+    opacity: 1;
+  }
+
+  .ink-settings-page { background-color: #ffffff; }
+  .claude-settings-page { background-color: #f7f3ea; }
+}
