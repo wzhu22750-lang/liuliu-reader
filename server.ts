@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { decodeTomatoText } from './src/parsers/tomatoObfuscation';
+import { fetchTndSidecarChapter } from './src/server/tndSidecar';
 import {
   assessChapterCompleteness,
   buildProviderUrl,
@@ -535,14 +536,19 @@ async function fetchWebChapterSnapshot(itemId: string): Promise<ChapterSnapshot>
   };
 }
 
-async function fetchConfiguredChapterProvider(bookId: string | undefined, itemId: string) {
+async function fetchConfiguredChapterProvider(bookId: string | undefined, itemId: string, chapterIndex?: number) {
   const endpoints = configuredContentEndpoints();
   const errors: string[] = [];
   const token = process.env.FANQIE_CONTENT_API_TOKEN?.trim();
 
   for (const endpoint of endpoints) {
     try {
-      const url = buildProviderUrl(endpoint, bookId, itemId);
+      if (endpoint === 'tnd-sidecar://local') {
+        if (!bookId || chapterIndex == null) throw new Error('TND sidecar 需要 bookId 和 chapterIndex');
+        const chapter = await fetchTndSidecarChapter(bookId, itemId, chapterIndex);
+        return { chapter, errors };
+      }
+      const url = buildProviderUrl(endpoint, bookId, itemId, chapterIndex);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
       const response = await fetch(url, {
@@ -569,13 +575,14 @@ async function fetchConfiguredChapterProvider(bookId: string | undefined, itemId
 }
 
 app.get('/api/tomato/chapter-content', async (req, res) => {
-  const { itemId, bookId } = req.query;
+  const { itemId, bookId, chapterIndex } = req.query;
   if (!itemId || typeof itemId !== 'string') {
     res.status(400).json({ error: '缺少 itemId' });
     return;
   }
   const cleanItemId = itemId.trim();
   const cleanBookId = typeof bookId === 'string' && /^\d{10,25}$/.test(bookId.trim()) ? bookId.trim() : undefined;
+  const cleanChapterIndex = typeof chapterIndex === 'string' && /^\d+$/.test(chapterIndex) ? Number(chapterIndex) : undefined;
 
   if (DEMO_CHAPTER_CONTENTS[cleanItemId]) {
     const data = DEMO_CHAPTER_CONTENTS[cleanItemId];
@@ -616,7 +623,7 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
   }
 
   const effectiveBookId = cleanBookId || webSnapshot?.bookId;
-  const providerResult = await fetchConfiguredChapterProvider(effectiveBookId, cleanItemId);
+  const providerResult = await fetchConfiguredChapterProvider(effectiveBookId, cleanItemId, cleanChapterIndex);
   if (providerResult.chapter) {
     const candidate: ChapterSnapshot = {
       itemId: cleanItemId,

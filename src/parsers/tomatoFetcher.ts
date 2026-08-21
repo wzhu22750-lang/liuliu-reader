@@ -178,6 +178,7 @@ export async function fetchTomatoBookInfo(bookIdOrUrl: string): Promise<TomatoBo
 export async function fetchTomatoChapterContent(
   bookId: string,
   itemId: string,
+  chapterIndex: number,
   options: { maxAttempts?: number } = {}
 ): Promise<TomatoChapterContent> {
   const maxAttempts = options.maxAttempts ?? 3;
@@ -185,7 +186,7 @@ export async function fetchTomatoChapterContent(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await fetch(`/api/tomato/chapter-content?bookId=${encodeURIComponent(bookId)}&itemId=${encodeURIComponent(itemId)}`);
+      const res = await fetch(`/api/tomato/chapter-content?bookId=${encodeURIComponent(bookId)}&itemId=${encodeURIComponent(itemId)}&chapterIndex=${chapterIndex}`);
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(payload.error || '获取章节正文失败');
 
@@ -301,7 +302,7 @@ export async function startTomatoNovelImport(
   for (let i = 0; i < bookInfo.chapters.length; i++) {
     const meta = bookInfo.chapters[i];
     try {
-      const chData = await fetchTomatoChapterContent(resolvedBookId, meta.itemId);
+      const chData = await fetchTomatoChapterContent(resolvedBookId, meta.itemId, meta.index);
       if (chData.fontUrl) detectedFontUrl = detectedFontUrl || chData.fontUrl;
       const chapter: Chapter = {
         id: `${internalBookId}_ch_${i}`, index: i,

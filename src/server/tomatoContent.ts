@@ -141,16 +141,18 @@ export function configuredContentEndpoints(raw = process.env.FANQIE_CONTENT_API_
     .filter(Boolean);
 }
 
-export function buildProviderUrl(endpoint: string, bookId: string | undefined, itemId: string): string {
+export function buildProviderUrl(endpoint: string, bookId: string | undefined, itemId: string, chapterIndex?: number): string {
   let url = endpoint
     .replaceAll('{item_id}', encodeURIComponent(itemId))
     .replaceAll('{item_ids}', encodeURIComponent(itemId))
-    .replaceAll('{book_id}', encodeURIComponent(bookId || ''));
+    .replaceAll('{book_id}', encodeURIComponent(bookId || ''))
+    .replaceAll('{chapter_index}', chapterIndex == null ? '' : encodeURIComponent(String(chapterIndex)));
   if (url !== endpoint) return url;
 
   const parsed = new URL(url);
   if (/batch_full|batch_chapter/.test(parsed.pathname)) parsed.searchParams.set('item_ids', itemId);
   else parsed.searchParams.set('item_id', itemId);
   if (bookId) parsed.searchParams.set('book_id', bookId);
+  if (chapterIndex != null) parsed.searchParams.set('chapter_index', String(chapterIndex));
   return parsed.toString();
 }

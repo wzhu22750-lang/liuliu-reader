@@ -34,7 +34,8 @@ test('parses mature batch_full chapter-id map responses', () => {
 });
 
 test('builds configurable batch provider URLs', () => {
-  const url = buildProviderUrl('https://example.test/reading/reader/batch_full/v', '456', '123');
+  const url = buildProviderUrl('https://example.test/reading/reader/batch_full/v', '456', '123', 10);
   assert.match(url, /item_ids=123/);
   assert.match(url, /book_id=456/);
+  assert.match(url, /chapter_index=10/);
 });
