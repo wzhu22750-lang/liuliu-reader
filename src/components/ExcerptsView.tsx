@@ -19,7 +19,7 @@ import {
   deleteExcerpt,
   updateExcerptThought,
   getAllBooks,
-} from '../db/indexedDB';
+} from '../db/store';
 
 interface Props {
   onOpenBookToChapter?: (bookId: string, chapterIndex: number) => void;

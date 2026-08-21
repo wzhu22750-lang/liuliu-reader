@@ -20,7 +20,7 @@ import {
   saveReaderSettings,
   generateBackup,
   restoreBackup,
-} from '../db/indexedDB';
+} from '../db/store';
 import { AISettings, ReaderSettings, BackupData } from '../types';
 
 interface Props {

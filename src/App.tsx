@@ -8,7 +8,7 @@ import { Book } from './types';
 import { Library } from './components/Library';
 import { Reader } from './components/Reader';
 import { ExcerptsView } from './components/ExcerptsView';
-import { getBookById } from './db/indexedDB';
+import { getBookById } from './db/store';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'library' | 'reader' | 'excerpts'>('library');

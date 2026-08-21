@@ -1,5 +1,6 @@
 import { Book, Chapter } from '../types';
-import { saveBook, getBookById } from '../db/indexedDB';
+import { saveBook, getBookById } from '../db/store';
+import { isTauri, invoke } from '../platform';
 import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
 
 export interface TomatoChapterMeta {
@@ -261,10 +262,56 @@ export function downloadNovelAsTxt(
 /**
  * 6. 启动全链路导入并实时更新 IndexedDB 与进度
  */
+export interface FanqieSearchHit {
+  bookId: string;
+  title: string;
+  author: string;
+  coverUrl?: string;
+  description?: string;
+}
+
+export async function searchFanqieBooks(query: string): Promise<FanqieSearchHit[]> {
+  if (isTauri()) {
+    return invoke<FanqieSearchHit[]>('search_fanqie', { query });
+  }
+  throw new Error('书名搜索目前仅在 App / Tauri 模式下可用，网页请使用分享链接或书籍 ID');
+}
+
 export async function startTomatoNovelImport(
   urlOrInput: string,
   onProgress?: (progress: TomatoFetchProgress) => void
 ): Promise<Book> {
+  if (isTauri()) {
+    const { listen } = await import('@tauri-apps/api/event');
+    const unlisten = await listen<{
+      bookId: string;
+      title: string;
+      status: string;
+      totalChapters: number;
+      completedChapters: number;
+      currentChapterTitle: string;
+      statusText: string;
+      isComplete: boolean;
+      error?: string;
+    }>('import-progress', (event) => {
+      const payload = event.payload;
+      onProgress?.({
+        bookId: payload.bookId,
+        totalChapters: payload.totalChapters,
+        completedChapters: payload.completedChapters,
+        currentChapterTitle: payload.currentChapterTitle,
+        statusText: payload.statusText,
+        isComplete: payload.isComplete,
+        error: payload.error,
+      });
+    });
+    try {
+      return await invoke<Book>('import_fanqie', { input: urlOrInput });
+    } finally {
+      unlisten();
+    }
+  }
+
   const parsed = extractUrlAndTitle(urlOrInput);
   const emit = (progress: TomatoFetchProgress) => onProgress?.(progress);
 

@@ -37,7 +37,7 @@ import {
   addExcerpt,
   getReaderSettings,
   saveReaderSettings,
-} from '../db/indexedDB';
+} from '../db/store';
 import { TextSelectionMenu, HIGHLIGHT_PALETTE } from './TextSelectionMenu';
 import { AISheet } from './AISheet';
 

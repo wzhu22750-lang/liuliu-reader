@@ -4,8 +4,11 @@ import {
   startTomatoNovelImport,
   downloadNovelAsTxt,
   extractUrlAndTitle,
+  searchFanqieBooks,
+  FanqieSearchHit,
   TomatoFetchProgress,
 } from '../parsers/tomatoFetcher';
+import { isTauri } from '../platform';
 import { Book } from '../types';
 
 interface Props {
@@ -19,6 +22,7 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
   const [progress, setProgress] = useState<TomatoFetchProgress | null>(null);
   const [importedBook, setImportedBook] = useState<Book | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchHits, setSearchHits] = useState<FanqieSearchHit[]>([]);
 
   // Real-time parsing analysis of the current input
   const parsedAnalysis = useMemo(() => {
@@ -26,13 +30,12 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
     return extractUrlAndTitle(inputUrl);
   }, [inputUrl]);
 
-  const handleStartImport = async () => {
-    if (!inputUrl.trim()) return;
+  const runImport = async (target: string) => {
     setLoading(true);
     setError(null);
-
+    setSearchHits([]);
     try {
-      const book = await startTomatoNovelImport(inputUrl.trim(), (p) => {
+      const book = await startTomatoNovelImport(target, (p) => {
         setProgress(p);
       });
       setImportedBook(book);
@@ -41,6 +44,28 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartImport = async () => {
+    if (!inputUrl.trim()) return;
+    const parsed = extractUrlAndTitle(inputUrl.trim());
+    if (isTauri() && parsed.platform === 'keyword_search' && !parsed.bookIdCandidate) {
+      setLoading(true);
+      setError(null);
+      try {
+        const hits = await searchFanqieBooks(inputUrl.trim());
+        setSearchHits(hits);
+        if (hits.length === 1) {
+          await runImport(hits[0].bookId);
+        }
+      } catch (err: any) {
+        setError(err.message || '搜索失败');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    await runImport(inputUrl.trim());
   };
 
   const handleOpenReaderNow = () => {
@@ -106,7 +131,7 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
         <div className="py-5 space-y-4">
           <div>
             <label className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1.5">
-              粘贴小说分享文本、链接或书籍 ID
+              粘贴分享链接、书籍 ID，或直接输入书名搜索
             </label>
             <div className="flex gap-2">
               <input
@@ -141,6 +166,24 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
           </div>
 
           {/* Extracted preview chip if user pasted rich text */}
+          {searchHits.length > 1 && !progress && (
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-[#e8e6df] dark:border-stone-800 divide-y divide-[#e8e6df] dark:divide-stone-800">
+              {searchHits.map((hit) => (
+                <button
+                  key={hit.bookId}
+                  type="button"
+                  onClick={() => runImport(hit.bookId)}
+                  className="w-full text-left px-3 py-2.5 hover:bg-[#f5f4ee] dark:hover:bg-stone-800 transition"
+                >
+                  <div className="text-xs font-medium truncate">{hit.title}</div>
+                  <div className="text-[11px] text-stone-500 truncate">
+                    {hit.author} · {hit.bookId}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
           {parsedAnalysis && !progress && (
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 bg-[#f5f4ee] dark:bg-stone-800/40 p-2.5 rounded-xl border border-[#e8e6df]/80 dark:border-stone-800">
               <span className="font-medium text-stone-600 dark:text-stone-300">智能识别：</span>

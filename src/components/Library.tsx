@@ -24,7 +24,7 @@ import {
   hideBook,
   updateBookProgress,
   seedInitialDataIfEmpty,
-} from '../db/indexedDB';
+} from '../db/store';
 import { parseTxtContent, TxtParseResult } from '../parsers/txtParser';
 import { parseEpubFile, createBookFromEpub } from '../parsers/epubParser';
 import { TxtSplitPreviewModal } from './TxtSplitPreviewModal';

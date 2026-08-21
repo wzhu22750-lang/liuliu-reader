@@ -17,7 +17,7 @@ import {
   saveAIInterpretation,
   addExcerpt,
   getAISettings,
-} from '../db/indexedDB';
+} from '../db/store';
 import { AIInterpretation, Excerpt } from '../types';
 
 interface Props {

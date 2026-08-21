@@ -29,6 +29,15 @@
 
 **溜溜读书 —— 让阅读不止于阅读。**
 
+## 桌面 / App（Tauri 2）
+
+`app实现` 分支把阅读器 UI 接到 Rust 后端：SQLite 书架、Fanqie 书源、整本导入任务、TXT 导出。说明见 [docs/app.md](docs/app.md)。
+
+```bash
+npm install
+npm run tauri:dev
+```
+
 ## 本地完整正文 Provider
 
 网页 Reader 在部分书籍的前若干目录项之后只返回预览。项目支持使用本地 `Tomato-Novel-Downloader` sidecar 获取完整正文，sidecar 只监听本机地址，下载缓存保存在未纳入 Git 的 `.local/tnd-provider` 目录。
