@@ -96,7 +96,7 @@ export interface AIInterpretation {
 export interface ReaderSettings {
   fontSize: number; // 14 to 28, default 18
   lineHeight: number; // 1.4 to 2.4, default 1.8
-  theme: 'light' | 'sepia' | 'dark' | 'night' | 'ink'; // default 'light'
+  theme: 'claude' | 'ink'; // default 'claude'
   renderMode: 'scroll' | 'page'; // default 'scroll' for smooth novel reading
   spoilerScope: 'current' | 'chapter' | 'book'; // default 'current'
   lastHighlightStyle: HighlightStyle;

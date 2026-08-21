@@ -59,7 +59,7 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts, theme, o
   const [settings, setSettings] = useState<ReaderSettings>({
     fontSize: 18,
     lineHeight: 1.8,
-    theme: 'light',
+    theme: 'claude',
     renderMode: 'scroll',
     spoilerScope: 'current',
     lastHighlightStyle: 'amber',
@@ -340,26 +340,11 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts, theme, o
   };
 
   // Themes
-  const themeClasses: Record<string, { bg: string; text: string; header: string }> = {
-    light: {
+  const themeClasses: Record<ReaderSettings['theme'], { bg: string; text: string; header: string }> = {
+    claude: {
       bg: 'bg-[#f5f4ee]',
       text: 'text-[#141413]',
       header: 'bg-[#f5f4ee]/95 border-[#e8e6df]',
-    },
-    sepia: {
-      bg: 'bg-[#f0ebe1]',
-      text: 'text-[#2d2926]',
-      header: 'bg-[#f0ebe1]/95 border-[#ded5c5]',
-    },
-    dark: {
-      bg: 'bg-[#1a1a19]',
-      text: 'text-[#d4d4d0]',
-      header: 'bg-[#1a1a19]/95 border-[#2e2e2c]',
-    },
-    night: {
-      bg: 'bg-[#10100f]',
-      text: 'text-[#a3a29e]',
-      header: 'bg-[#10100f]/95 border-[#222220]',
     },
     ink: {
       bg: 'bg-white',
@@ -632,13 +617,10 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts, theme, o
           {/* Theme Selector */}
           <div className="space-y-1.5">
             <label className="text-[11px] text-stone-500 font-medium">阅读主题</label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {[
-                { id: 'light', name: '素雅', bg: 'bg-[#f5f4ee]', border: 'border-[#e8e6df]' },
-                { id: 'sepia', name: '竹简', bg: 'bg-[#f0ebe1]', border: 'border-[#ded5c5]' },
-                { id: 'dark', name: '水墨', bg: 'bg-[#1a1a19]', border: 'border-stone-700' },
-                { id: 'night', name: '夜读', bg: 'bg-[#10100f]', border: 'border-stone-800' },
-                { id: 'ink', name: 'E-Ink', bg: 'bg-white', border: 'border-[#d5d5d0]' },
+                { id: 'claude', name: 'Claude风', bg: 'bg-[#f5f4ee]', border: 'border-[#e8e6df]' },
+                { id: 'ink', name: 'E-Ink墨水屏', bg: 'bg-white', border: 'border-[#d5d5d0]' },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -650,7 +632,7 @@ export const Reader: React.FC<Props> = ({ book, onBack, onOpenExcerpts, theme, o
                   }}
                   className={`py-1.5 rounded-xl border text-[11px] font-medium transition ${t.bg} ${
                     settings.theme === t.id ? 'ring-2 ring-[#da7756]' : ''
-                  } ${t.id === 'dark' || t.id === 'night' ? 'text-white' : 'text-[#141413]'}`}
+                  } text-[#141413]`}
                 >
                   {t.name}
                 </button>

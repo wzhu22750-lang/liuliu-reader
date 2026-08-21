@@ -13,7 +13,7 @@ import { getBookById, getReaderSettings, saveReaderSettings } from './db/indexed
 export default function App() {
   const [currentView, setCurrentView] = useState<'library' | 'reader' | 'excerpts'>('library');
   const [activeBook, setActiveBook] = useState<Book | null>(null);
-  const [theme, setTheme] = useState<ReaderSettings['theme']>('light');
+  const [theme, setTheme] = useState<ReaderSettings['theme']>('claude');
 
   useEffect(() => {
     getReaderSettings().then((settings) => setTheme(settings.theme));
