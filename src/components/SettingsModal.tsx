@@ -172,7 +172,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
               <Palette className="ink-setting-icon" />
               <span><strong>主题模式</strong><small>选择应用的阅读界面</small></span>
               <select value={readerSettings.theme} onChange={(event) => selectTheme(event.target.value as ReaderSettings['theme'])} aria-label="主题模式">
-                <option value="claude">Claude风</option><option value="ink">E-Ink墨水屏</option>
+                <option value="ink">溜溜读书·墨水屏</option>
               </select>
             </div>
             <label className="ink-setting-row">

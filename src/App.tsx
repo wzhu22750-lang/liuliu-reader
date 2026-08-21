@@ -15,16 +15,24 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'library' | 'reader' | 'excerpts' | 'settings'>('library');
   const [settingsOrigin, setSettingsOrigin] = useState<'library' | 'excerpts'>('library');
   const [activeBook, setActiveBook] = useState<Book | null>(null);
-  const [theme, setTheme] = useState<ReaderSettings['theme']>('claude');
+  // 溜溜读书固定使用墨水屏书架/阅读 UI；兼容旧版本保存的 Claude 主题，但启动时自动迁移。
+  const [theme, setTheme] = useState<ReaderSettings['theme']>('ink');
 
   useEffect(() => {
-    getReaderSettings().then((settings) => setTheme(settings.theme));
+    getReaderSettings().then(async (settings) => {
+      if (settings.theme !== 'ink') {
+        const migrated = { ...settings, theme: 'ink' as const };
+        await saveReaderSettings(migrated);
+      }
+      setTheme('ink');
+    });
   }, []);
 
   const handleThemeChange = async (nextTheme: ReaderSettings['theme']) => {
-    setTheme(nextTheme);
+    const liuliTheme: ReaderSettings['theme'] = nextTheme === 'ink' ? 'ink' : 'ink';
+    setTheme(liuliTheme);
     const current = await getReaderSettings();
-    await saveReaderSettings({ ...current, theme: nextTheme });
+    await saveReaderSettings({ ...current, theme: liuliTheme });
   };
 
   const handleOpenBook = (book: Book) => {

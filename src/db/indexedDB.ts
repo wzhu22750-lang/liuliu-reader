@@ -16,7 +16,7 @@ const DB_VERSION = 1;
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.8,
-  theme: 'claude',
+  theme: 'ink',
   renderMode: 'scroll',
   spoilerScope: 'current',
   lastHighlightStyle: 'amber',
