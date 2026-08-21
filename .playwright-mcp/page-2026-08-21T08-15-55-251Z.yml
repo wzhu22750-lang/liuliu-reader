@@ -1,0 +1,86 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - generic [ref=e6]:
+      - paragraph [ref=e49]: LIULIU READER
+      - heading "书架" [level=1] [ref=e50]
+      - paragraph [ref=e51]: 共 3 本书 · 安静阅读，随时继续
+    - generic [ref=e52]:
+      - button "导入书籍" [ref=e53]
+      - button "我的与设置" [active] [ref=e57]
+  - main [ref=e59]:
+    - textbox "搜索书名或作者" [ref=e64]
+    - generic [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e67]: 正在阅读
+        - generic [ref=e68]: 3 本
+      - generic [ref=e69]:
+        - article [ref=e70]:
+          - button "阅读《逃避自由》" [ref=e71]:
+            - generic [ref=e72]: 逃
+          - button "逃避自由 埃里希·弗洛姆 (Erich Fromm) · 4 章 第一章 自由——一个心理学问题吗？ · 已读 25%" [ref=e73]:
+            - strong [ref=e74]: 逃避自由
+            - generic [ref=e75]: 埃里希·弗洛姆 (Erich Fromm) · 4 章
+            - generic [ref=e76]: 第一章 自由——一个心理学问题吗？ · 已读 25%
+          - button "管理《逃避自由》" [ref=e77]
+        - article [ref=e82]:
+          - button "阅读《庆余年 · 精选篇章》" [ref=e83]:
+            - generic [ref=e84]: 庆
+          - button "庆余年 · 精选篇章 猫腻 · 3 章 第一章 牛栏街前杀机现 · 已读 33%" [ref=e85]:
+            - strong [ref=e86]: 庆余年 · 精选篇章
+            - generic [ref=e87]: 猫腻 · 3 章
+            - generic [ref=e88]: 第一章 牛栏街前杀机现 · 已读 33%
+          - button "管理《庆余年 · 精选篇章》" [ref=e89]
+        - article [ref=e94]:
+          - button "阅读《三体 · 黑暗森林法则》" [ref=e95]:
+            - generic [ref=e96]: 三
+          - button "三体 · 黑暗森林法则 刘慈欣 · 3 章 第一章 褐蚁与古筝遗迹 · 已读 0%" [ref=e97]:
+            - strong [ref=e98]: 三体 · 黑暗森林法则
+            - generic [ref=e99]: 刘慈欣 · 3 章
+            - generic [ref=e100]: 第一章 褐蚁与古筝遗迹 · 已读 0%
+          - button "管理《三体 · 黑暗森林法则》" [ref=e101]
+  - navigation "主导航" [ref=e106]:
+    - button "首页" [ref=e107]
+    - button "书架" [ref=e112]
+    - button "我的" [ref=e116]
+  - generic [ref=e121]:
+    - generic [ref=e122]:
+      - generic [ref=e123]:
+        - paragraph [ref=e124]: LIULIU READER
+        - heading "我的" [level=1] [ref=e125]
+      - button "返回书架" [ref=e126]
+    - main [ref=e130]:
+      - generic [ref=e131]:
+        - button "书源管理 导入、整理和管理本地书籍" [ref=e132]:
+          - generic [ref=e135]:
+            - strong [ref=e136]: 书源管理
+            - generic [ref=e137]: 导入、整理和管理本地书籍
+        - button "阅读与规则 防剧透范围、选段与阅读偏好" [ref=e140]:
+          - generic [ref=e144]:
+            - strong [ref=e145]: 阅读与规则
+            - generic [ref=e146]: 防剧透范围、选段与阅读偏好
+        - generic [ref=e149]:
+          - generic [ref=e156]:
+            - strong [ref=e157]: 主题模式
+            - generic [ref=e158]: 选择应用的阅读界面
+          - combobox "主题模式" [ref=e159]:
+            - option "素雅"
+            - option "竹简"
+            - option "水墨"
+            - option "夜读"
+            - option "E-Ink（墨水屏）" [selected]
+        - generic [ref=e160]:
+          - generic [ref=e166]:
+            - strong [ref=e167]: 智能选段
+            - generic [ref=e168]: 按句号、感叹号或问号吸附完整句子
+          - checkbox "智能选段" [checked] [ref=e169]
+      - heading "设置" [level=2] [ref=e170]
+      - generic [ref=e171]:
+        - button "本地书籍管理 返回书架，导入或删除本地书籍" [ref=e172]:
+          - generic [ref=e175]:
+            - strong [ref=e176]: 本地书籍管理
+            - generic [ref=e177]: 返回书架，导入或删除本地书籍
+        - button "备份与恢复 导出完整离线备份，保留阅读数据" [ref=e180]:
+          - generic [ref=e183]:
+            - strong [ref=e184]: 备份与恢复
+            - generic [ref=e185]: 导出完整离线备份，保留阅读数据
+      - button "打开 AI 与备份高级设置" [ref=e188]
