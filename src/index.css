@@ -185,6 +185,8 @@
   .ink-filter-strip { display: flex; gap: 8px; overflow-x: auto; padding: 18px 0 2px; scrollbar-width: none; }
   .ink-filter-strip::-webkit-scrollbar { display: none; }
   .ink-filter-strip button { flex: 0 0 auto; border: 1px solid var(--ink-line); border-radius: 999px; padding: 6px 11px; background: transparent; color: var(--ink-muted); font: 600 12px/1 inherit; }
+  .ink-filter-strip button:focus { outline: 2px solid var(--ink-copy); outline-offset: 2px; }
+  .ink-filter-strip button:focus-visible { outline: 2px solid var(--ink-copy); outline-offset: 2px; }
   .ink-filter-strip button.is-selected { border-color: var(--ink-copy); color: #fff; background: var(--ink-copy); }
   .ink-excerpt-list { border-bottom: 1px solid var(--ink-line); }
   .ink-excerpt-row { padding: 22px 0 18px; border-bottom: 1px solid #e7e7e3; }
