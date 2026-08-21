@@ -28,7 +28,8 @@
 @layer components {
   .ink-app,
   .ink-settings-page,
-  .ink-reader {
+  .ink-reader,
+  .ink-excerpts-page {
     --ink-paper: #ffffff;
     --ink-soft: #f3f3f0;
     --ink-line: #d6d6d1;
