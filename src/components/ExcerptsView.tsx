@@ -11,6 +11,8 @@ import {
   Filter,
   Search,
   BookOpen,
+  Library as LibraryIcon,
+  UserRound,
   Sparkles,
 } from 'lucide-react';
 import { Excerpt, Book, ReaderSettings } from '../types';
@@ -24,10 +26,11 @@ import {
 interface Props {
   onOpenBookToChapter?: (bookId: string, chapterIndex: number) => void;
   onBackToLibrary: () => void;
+  onOpenSettings?: () => void;
   theme?: ReaderSettings['theme'];
 }
 
-export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLibrary, theme }) => {
+export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLibrary, onOpenSettings, theme }) => {
   const [excerpts, setExcerpts] = useState<Excerpt[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBookFilter, setSelectedBookFilter] = useState<string>('all');
@@ -160,8 +163,9 @@ export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLib
         </main>
 
         <nav className="ink-bottom-nav" aria-label="主导航">
-          <button type="button" onClick={onBackToLibrary}><BookOpen className="w-6 h-6" /><span>书架</span></button>
           <button type="button" className="is-active"><BookMarked className="w-6 h-6" /><span>摘抄</span></button>
+          <button type="button" onClick={onBackToLibrary}><LibraryIcon className="w-6 h-6" /><span>书架</span></button>
+          <button type="button" onClick={onOpenSettings} aria-label="打开我的设置"><UserRound className="w-6 h-6" /><span>我的</span></button>
         </nav>
       </div>
     );

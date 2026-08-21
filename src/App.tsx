@@ -8,10 +8,12 @@ import { Book, ReaderSettings } from './types';
 import { Library } from './components/Library';
 import { Reader } from './components/Reader';
 import { ExcerptsView } from './components/ExcerptsView';
+import { SettingsModal } from './components/SettingsModal';
 import { getBookById, getReaderSettings, saveReaderSettings } from './db/indexedDB';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState<'library' | 'reader' | 'excerpts'>('library');
+  const [currentView, setCurrentView] = useState<'library' | 'reader' | 'excerpts' | 'settings'>('library');
+  const [settingsOrigin, setSettingsOrigin] = useState<'library' | 'excerpts'>('library');
   const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [theme, setTheme] = useState<ReaderSettings['theme']>('claude');
 
@@ -28,6 +30,11 @@ export default function App() {
   const handleOpenBook = (book: Book) => {
     setActiveBook(book);
     setCurrentView('reader');
+  };
+
+  const handleOpenSettings = (origin: 'library' | 'excerpts') => {
+    setSettingsOrigin(origin);
+    setCurrentView('settings');
   };
 
   const handleOpenBookToChapter = async (bookId: string, chapterIndex: number) => {
@@ -50,7 +57,7 @@ export default function App() {
   };
 
   return (
-    <div id="reader-ai-root" data-theme={theme} className="min-h-screen bg-[#f5f4ee] text-[#141413]">
+    <div id="reader-ai-root" data-theme={theme} className={theme === 'ink' ? 'min-h-screen bg-white text-[#111111]' : 'min-h-screen bg-[#f5f4ee] text-[#141413]'}>
       {currentView === 'library' && (
         <Library
           onOpenBook={handleOpenBook}
@@ -74,13 +81,22 @@ export default function App() {
       )}
 
       {currentView === 'excerpts' && (
-        <div className="min-h-screen bg-[#f5f4ee] text-[#141413]">
+        <div className={theme === 'ink' ? 'min-h-screen bg-white text-[#111111]' : 'min-h-screen bg-[#f5f4ee] text-[#141413]'}>
           <ExcerptsView
             onOpenBookToChapter={handleOpenBookToChapter}
             onBackToLibrary={() => setCurrentView('library')}
+            onOpenSettings={() => handleOpenSettings('excerpts')}
             theme={theme}
           />
         </div>
+      )}
+
+      {currentView === 'settings' && (
+        <SettingsModal
+          onClose={() => setCurrentView(settingsOrigin)}
+          theme={theme}
+          onThemeChange={handleThemeChange}
+        />
       )}
     </div>
   );

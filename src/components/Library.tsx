@@ -325,7 +325,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts, theme, on
         </nav>
 
         {txtModalData && <TxtSplitPreviewModal rawText={txtModalData.rawText} fileName={txtModalData.fileName} initialResult={txtModalData.initialResult} onConfirm={handleConfirmTxtImport} onCancel={() => setTxtModalData(null)} />}
-        {showTomatoModal && <TomatoImportModal onSuccess={(book, openDirectly) => { setShowTomatoModal(false); loadBooks(); if (openDirectly) onOpenBook(book); }} onClose={() => { setShowTomatoModal(false); loadBooks(); }} />}
+        {showTomatoModal && <TomatoImportModal theme={theme} onSuccess={(book, openDirectly) => { setShowTomatoModal(false); loadBooks(); if (openDirectly) onOpenBook(book); }} onClose={() => { setShowTomatoModal(false); loadBooks(); }} />}
         {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onSettingsUpdated={loadBooks} theme={theme} onThemeChange={onThemeChange} />}
       </div>
     );
@@ -732,6 +732,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts, theme, on
       {/* Tomato Import Modal */}
       {showTomatoModal && (
         <TomatoImportModal
+          theme={theme}
           onSuccess={(book, openDirectly) => {
             setShowTomatoModal(false);
             loadBooks();
