@@ -27,3 +27,21 @@
 需要从原始 `.so` 的 Tauri invoke 注册路径恢复实际 command 清单、参数和返回值。当前证据只确认了 Rust backend 的模型字段和内部方法，尚不足以安全填写 `FANQIE_NATIVE_COMMANDS`。
 
 恢复命令后，适配范围应限制在 `src/platform/fanqieBackend.ts`，再由导入弹窗、下载状态和导出流程调用适配层。
+
+## `番茄器/fanqie-apk` 新证据
+
+该目录比先前的 `逆向解密` 目录更有用，原因是它包含一份明确的实现逻辑记录：
+
+- `notes/implementation-logic.md` 明确记录了 Java MainActivity → Wry/Tauri WebView → `__TAURI_INTERNALS__.invoke` / `Ipc.postMessage` → `Rust.ipc` JNI → `AppState::dispatch_runtime` 的路径。
+- `apktool_out/lib/arm64-v8a/libfanqie_novel_downloader_tauri.so` 与前一份样本一致，未 strip，仍可读取完整 Rust 符号。
+- `nm -C` 已确认 backend 具备：`dispatch`、`dispatch_runtime`、`bookshelf_list`、`history_payload`、`job_list`、`chapter`、`chapter_batch_with_control`、`create_download`、`create_batch_download`、`retry_download`、`save_state`、`write_txt`、`write_epub` 等内部能力。
+- `Rust.java` 确认 Android 侧不是普通 Activity 业务实现，而是 native Tauri bridge；因此不应把 UI 逻辑塞进 smali。
+- `.so` 字符串确认了 `book_input`、`chapter_start`、`chapter_end`、`overwrite_existing`、`file_format`、`download_preferences`、`bookshelf`、`history` 等请求/状态字段。
+
+### 影响
+
+这份目录把“只知道有 backend”推进到了“知道 WebView 到 Rust 的 IPC 入口，以及 backend 的主要动作集合”。它足以支持下一步恢复 `dispatch_runtime` 的动作名和 JSON payload，而不是继续猜测独立的 `search`、`directory`、`download` Tauri command。
+
+### 仍未确认
+
+目前还不能从这些静态资料直接证明完整的动作字符串和每个动作的精确参数。因此 `FANQIE_NATIVE_COMMANDS` 暂时保持未映射是有意的。下一步应围绕 `dispatch_runtime` 做字符串交叉引用/反汇编，或者在授权 Android 测试环境中抓取原 UI 的 IPC 请求，得到真实 payload 后再接入 React。
