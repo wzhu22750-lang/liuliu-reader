@@ -4,6 +4,15 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { decodeTomatoText } from './src/parsers/tomatoObfuscation';
+import {
+  assessChapterCompleteness,
+  buildProviderUrl,
+  configuredContentEndpoints,
+  extractInitialState,
+  normalizeNovelContent,
+  parseProviderPayload,
+  ChapterSnapshot,
+} from './src/server/tomatoContent';
 
 dotenv.config();
 
@@ -525,167 +534,170 @@ const DEMO_CHAPTER_CONTENTS: Record<string, { title: string; content: string }> 
   },
 };
 
-// Single Chapter content fetcher. Real imports must fail loudly; demo content is only
-// available for explicit demo item IDs and is never used as a network fallback.
-function normalizeNovelContent(value: unknown): string {
-  if (typeof value === 'string') {
-    return value
-      .replace(/<p\s*>/gi, '')
-      .replace(/<\/p\s*>/gi, '\n\n')
-      .replace(/<br\s*\/?\s*>/gi, '\n')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/&amp;/gi, '&')
-      .replace(/<[^>]+>/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  }
-  if (Array.isArray(value)) return value.map(normalizeNovelContent).filter(Boolean).join('\n\n');
-  return '';
-}
+// Chapter content providers follow the mature downloader pattern:
+// web reader for metadata/free chapters, then an explicitly configured plaintext
+// batch_full-compatible provider for locked previews. No demo or preview text is
+// ever accepted as a successful real import.
+async function fetchWebChapterSnapshot(itemId: string): Promise<ChapterSnapshot> {
+  const readerUrl = `https://fanqienovel.com/reader/${itemId}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const response = await fetch(readerUrl, {
+    signal: controller.signal,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    },
+  }).finally(() => clearTimeout(timeoutId));
+  if (!response.ok) throw new Error(`网页正文请求失败：HTTP ${response.status}`);
 
-function readContentCandidate(value: any): string {
-  return normalizeNovelContent(
-    value?.content ?? value?.text ?? value?.paragraphs ?? value?.sections ?? value?.content_list
-  );
-}
-
-function readPaginationMeta(value: any) {
-  const root = value?.data ?? value ?? {};
+  const html = await response.text();
+  const state = extractInitialState(html);
+  const chapterData = state.reader?.chapterData;
+  if (!chapterData) throw new Error('网页没有返回 chapterData');
+  const fontMatch = html.match(/src:url\((https:\/\/[^)]+\.woff2)\)/);
   return {
-    hasMore: Boolean(root.has_more ?? root.hasMore ?? root.pagination?.has_more),
-    nextCursor: root.next_cursor ?? root.nextCursor ?? root.pagination?.next_cursor ?? null,
+    itemId,
+    bookId: chapterData.bookId ? String(chapterData.bookId) : undefined,
+    title: chapterData.title || '正文章节',
+    content: normalizeNovelContent(chapterData.content || ''),
+    expectedWordCount: Number(chapterData.chapterWordNumber) || undefined,
+    isChapterLock: Boolean(chapterData.isChapterLock),
+    needPay: Boolean(chapterData.needPay),
+    fontUrl: fontMatch?.[1],
   };
 }
 
-async function fetchReaderApiContent(itemId: string) {
-  const parts: string[] = [];
-  let cursor: string | null = null;
-  let page = 1;
-  let title = '';
-  let fontUrl: string | undefined;
-  let sawPagination = false;
+async function fetchConfiguredChapterProvider(bookId: string | undefined, itemId: string) {
+  const endpoints = configuredContentEndpoints();
+  const errors: string[] = [];
+  const token = process.env.FANQIE_CONTENT_API_TOKEN?.trim();
 
-  for (let requestNumber = 0; requestNumber < 50; requestNumber++) {
-    const params = new URLSearchParams({
-      device_platform: 'android', version_code: '600', item_id: itemId,
-    });
-    if (cursor) params.set('cursor', cursor);
-    if (page > 1) params.set('page', String(page));
-    const url = `https://novel.snssdk.com/api/novel/book/reader/full/v1/?${params}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-    let response: Response;
+  for (const endpoint of endpoints) {
     try {
-      response = await fetch(url, {
+      const url = buildProviderUrl(endpoint, bookId, itemId);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'com.dragon.read/6.0.0 (Linux; U; Android 12; zh_CN)',
           'Accept': 'application/json, text/plain, */*',
+          'Accept-Encoding': 'identity',
+          ...(token ? { token, Authorization: `Bearer ${token}` } : {}),
         },
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-    if (!response.ok) break;
-    const data = await response.json().catch(() => null);
-    if (!data) break;
-    const body = data.data ?? data;
-    const content = readContentCandidate(body);
-    if (content) parts.push(content);
-    title = title || body.title || body.chapter_title || '';
-    const pagination = readPaginationMeta(body);
-    if (!pagination.hasMore && !pagination.nextCursor) break;
-    sawPagination = true;
-    if (pagination.nextCursor && String(pagination.nextCursor) !== cursor) {
-      cursor = String(pagination.nextCursor);
-    } else {
-      page += 1;
+      }).finally(() => clearTimeout(timeoutId));
+      if (!response.ok) {
+        errors.push(`${new URL(url).host}: HTTP ${response.status}`);
+        continue;
+      }
+      const payload = await response.json().catch(() => null);
+      const parsed = parseProviderPayload(payload, itemId, new URL(url).host);
+      if (parsed?.content) return { chapter: parsed, errors };
+      errors.push(`${new URL(url).host}: 未返回章节 ${itemId} 的明文正文`);
+    } catch (error: any) {
+      errors.push(`${endpoint}: ${error.message}`);
     }
   }
-
-  const content = parts.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
-  return { content, title, fontUrl, sawPagination };
+  return { chapter: null, errors };
 }
 
 app.get('/api/tomato/chapter-content', async (req, res) => {
-  const { itemId } = req.query;
+  const { itemId, bookId } = req.query;
   if (!itemId || typeof itemId !== 'string') {
     res.status(400).json({ error: '缺少 itemId' });
     return;
   }
   const cleanItemId = itemId.trim();
+  const cleanBookId = typeof bookId === 'string' && /^\d{10,25}$/.test(bookId.trim()) ? bookId.trim() : undefined;
 
   if (DEMO_CHAPTER_CONTENTS[cleanItemId]) {
     const data = DEMO_CHAPTER_CONTENTS[cleanItemId];
-    res.json({ itemId: cleanItemId, title: data.title, content: data.content, wordCount: data.content.length, complete: true });
+    res.json({ itemId: cleanItemId, title: data.title, content: data.content, wordCount: data.content.length, complete: true, provider: 'demo' });
     return;
   }
-
   if (!/^\d{10,25}$/.test(cleanItemId)) {
     res.status(400).json({ error: `无效的章节 item_id：${cleanItemId}` });
     return;
   }
 
-  let lastError = '未找到正文接口响应';
+  let webSnapshot: ChapterSnapshot | null = null;
+  let webError: string | undefined;
   try {
-    const readerUrl = `https://fanqienovel.com/reader/${cleanItemId}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const readerRes = await fetch(readerUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      },
-    }).finally(() => clearTimeout(timeoutId));
-
-    if (readerRes.ok) {
-      const html = await readerRes.text();
-      const stateIdx = html.indexOf('window.__INITIAL_STATE__=');
-      if (stateIdx !== -1) {
-        const raw = html.slice(stateIdx + 'window.__INITIAL_STATE__='.length);
-        let depth = 0;
-        let end = 0;
-        for (let i = 0; i < raw.length; i++) {
-          if (raw[i] === '{') depth++;
-          else if (raw[i] === '}') {
-            depth--;
-            if (depth === 0) { end = i + 1; break; }
-          }
-        }
-        if (end > 0) {
-          const state = JSON.parse(raw.slice(0, end));
-          const chapterData = state.reader?.chapterData || {};
-          const content = readContentCandidate(chapterData);
-          if (content && !chapterData.has_more && !chapterData.next_cursor) {
-            const decoded = decodeTomatoText(content);
-            const fontMatch = html.match(/src:url\((https:\/\/[^)]+\.woff2)\)/);
-            res.json({ itemId: cleanItemId, title: chapterData.title || '正文章节', content: decoded.content, wordCount: decoded.content.length, fontUrl: fontMatch?.[1], complete: true, decodeStatus: decoded.status, decodeMappingId: decoded.mappingId, decodeUnknownCount: decoded.unknownCount });
-            return;
-          }
-          lastError = '网页正文存在分页或未返回完整正文';
-        }
-      }
-    } else {
-      lastError = `网页正文请求失败：HTTP ${readerRes.status}`;
-    }
-  } catch (error: any) {
-    lastError = `网页正文请求异常：${error.message}`;
-  }
-
-  try {
-    const apiResult = await fetchReaderApiContent(cleanItemId);
-    if (apiResult.content) {
-      const decoded = decodeTomatoText(apiResult.content);
-      res.json({ itemId: cleanItemId, title: apiResult.title || '正文章节', content: decoded.content, wordCount: decoded.content.length, fontUrl: apiResult.fontUrl, complete: true, decodeStatus: decoded.status, decodeMappingId: decoded.mappingId, decodeUnknownCount: decoded.unknownCount });
+    webSnapshot = await fetchWebChapterSnapshot(cleanItemId);
+    const webAssessment = assessChapterCompleteness(webSnapshot);
+    if (webAssessment.complete) {
+      const decoded = decodeTomatoText(webSnapshot.content);
+      res.json({
+        itemId: cleanItemId,
+        title: webSnapshot.title,
+        content: decoded.content,
+        wordCount: decoded.content.length,
+        expectedWordCount: webAssessment.expectedWordCount,
+        complete: true,
+        isPreview: false,
+        provider: 'fanqie-web',
+        fontUrl: webSnapshot.fontUrl,
+        decodeStatus: decoded.status,
+        decodeMappingId: decoded.mappingId,
+        decodeUnknownCount: decoded.unknownCount,
+      });
       return;
     }
-    lastError = 'API 返回空正文';
+    webError = webAssessment.reason;
   } catch (error: any) {
-    lastError = `API 正文请求异常：${error.message}`;
+    webError = error.message;
   }
 
-  res.status(502).json({ error: `章节 ${cleanItemId} 获取失败：${lastError}` });
+  const effectiveBookId = cleanBookId || webSnapshot?.bookId;
+  const providerResult = await fetchConfiguredChapterProvider(effectiveBookId, cleanItemId);
+  if (providerResult.chapter) {
+    const candidate: ChapterSnapshot = {
+      itemId: cleanItemId,
+      bookId: effectiveBookId,
+      title: providerResult.chapter.title || webSnapshot?.title || '正文章节',
+      content: providerResult.chapter.content,
+      expectedWordCount: webSnapshot?.expectedWordCount,
+      isChapterLock: false,
+      needPay: false,
+      fontUrl: webSnapshot?.fontUrl,
+    };
+    const assessment = assessChapterCompleteness(candidate);
+    if (assessment.complete) {
+      const decoded = decodeTomatoText(candidate.content);
+      res.json({
+        itemId: cleanItemId,
+        title: candidate.title,
+        content: decoded.content,
+        wordCount: decoded.content.length,
+        expectedWordCount: assessment.expectedWordCount,
+        complete: true,
+        isPreview: false,
+        provider: providerResult.chapter.provider,
+        fontUrl: candidate.fontUrl,
+        decodeStatus: decoded.status,
+        decodeMappingId: decoded.mappingId,
+        decodeUnknownCount: decoded.unknownCount,
+      });
+      return;
+    }
+    providerResult.errors.push(`${providerResult.chapter.provider}: ${assessment.reason}`);
+  }
+
+  const expected = webSnapshot?.expectedWordCount;
+  const actual = webSnapshot ? Array.from(webSnapshot.content).length : 0;
+  const providerHint = configuredContentEndpoints().length === 0
+    ? '未配置 FANQIE_CONTENT_API_ENDPOINTS；网页锁定章节不能被当作完整正文。'
+    : `完整正文 Provider 均失败：${providerResult.errors.join('；')}`;
+  res.status(502).json({
+    code: webSnapshot?.isChapterLock ? 'WEB_PREVIEW_LOCKED' : 'CHAPTER_INCOMPLETE',
+    error: `章节 ${cleanItemId} 获取失败：${webError || '正文不完整'} ${providerHint}`.trim(),
+    title: webSnapshot?.title,
+    complete: false,
+    isPreview: Boolean(webSnapshot?.isChapterLock),
+    expectedWordCount: expected,
+    actualWordCount: actual,
+    providerErrors: providerResult.errors,
+  });
 });
 
 // Legacy backward-compatible endpoint
