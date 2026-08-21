@@ -24,6 +24,15 @@ export interface FanqieNativeDirectory {
   items?: FanqieNativeChapter[];
 }
 
+export interface FanqieDispatchEnvelope {
+  /** Action discriminator used by AppState::dispatch_runtime. */
+  action: string;
+  /** Action-specific payload; exact fields are recovered per action. */
+  payload?: Record<string, unknown>;
+  /** Optional persisted state passed by the original frontend. */
+  state?: Record<string, unknown>;
+}
+
 export interface FanqieNativeProgress {
   job_id?: string;
   status?: string;
@@ -39,6 +48,10 @@ export interface FanqieNativeProgress {
  * change; the Liuli Reader UI stays independent of the IPC naming.
  */
 export const FANQIE_NATIVE_COMMANDS = {
+  // The APK evidence confirms AppState::dispatch_runtime, but does not yet
+  // prove the public Tauri command string. Keep this null until IPC capture or
+  // command-registration analysis confirms it.
+  dispatch: null,
   search: null,
   directory: null,
   chapter: null,
@@ -46,6 +59,14 @@ export const FANQIE_NATIVE_COMMANDS = {
   downloadProgress: null,
   export: null,
 } as const;
+
+export async function invokeFanqieDispatch<T>(envelope: FanqieDispatchEnvelope): Promise<T> {
+  const command = FANQIE_NATIVE_COMMANDS.dispatch;
+  if (!command) {
+    throw new Error('番茄器 dispatch command 尚未完成验证，拒绝猜测 IPC 协议');
+  }
+  return invokeTauri<T>(command, envelope as unknown as Record<string, unknown>);
+}
 
 export function isFanqieNativeBackendAvailable(): boolean {
   return isTauriRuntime() && Object.values(FANQIE_NATIVE_COMMANDS).some(Boolean);
