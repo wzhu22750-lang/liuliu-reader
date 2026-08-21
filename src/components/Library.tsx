@@ -15,7 +15,6 @@ import {
   DownloadCloud,
   CheckCircle2,
   Library as LibraryIcon,
-  Home,
   UserRound,
   SlidersHorizontal,
   Upload,
@@ -320,7 +319,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts, theme, on
         </main>
 
         <nav className="ink-bottom-nav" aria-label="主导航">
-          <button type="button" onClick={() => showToast('首页内容正在整理')}><Home className="w-6 h-6" /><span>首页</span></button>
+          <button type="button" onClick={onOpenExcerpts}><BookMarked className="w-6 h-6" /><span>摘抄</span></button>
           <button type="button" className="is-active"><LibraryIcon className="w-6 h-6" /><span>书架</span></button>
           <button type="button" onClick={() => setShowSettings(true)}><UserRound className="w-6 h-6" /><span>我的</span></button>
         </nav>
