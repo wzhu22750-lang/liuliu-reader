@@ -8,15 +8,20 @@ import {
   FanqieSearchHit,
   TomatoFetchProgress,
 } from '../parsers/tomatoFetcher';
+<<<<<<< HEAD
 import { isTauri } from '../platform';
 import { Book } from '../types';
+=======
+import { Book, ReaderSettings } from '../types';
+>>>>>>> codex/UI-design
 
 interface Props {
   onSuccess: (book: Book, openDirectly?: boolean) => void;
   onClose: () => void;
+  theme?: ReaderSettings['theme'];
 }
 
-export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
+export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose, theme }) => {
   const [inputUrl, setInputUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<TomatoFetchProgress | null>(null);
@@ -102,6 +107,122 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
       setError(err.message || '正文仍包含未解码字符，已阻止导出乱码文件');
     }
   };
+
+  if (theme === 'ink') {
+    const totalChapters = Math.max(1, progress?.totalChapters || 0);
+    const progressPercent = progress
+      ? Math.max(5, Math.round((progress.completedChapters / totalChapters) * 100))
+      : 0;
+
+    return (
+      <section className="ink-tomato-import fixed inset-0 z-[60] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="ink-tomato-title">
+        <div className="ink-tomato-shell">
+          <header className="ink-tomato-header">
+            <div>
+              <p className="ink-eyebrow">LIULIU READER · NETWORK IMPORT</p>
+              <h2 id="ink-tomato-title">导入番茄小说</h2>
+              <p>从作品分享链接导入完整章节，保留本地离线阅读。</p>
+            </div>
+            <button type="button" className="ink-icon-button" onClick={onClose} aria-label="关闭导入">
+              <X className="w-5 h-5" />
+            </button>
+          </header>
+
+          <main className="ink-tomato-body">
+            <section className="ink-tomato-section" aria-labelledby="ink-tomato-link-label">
+              <div className="ink-tomato-label-row">
+                <span id="ink-tomato-link-label">作品链接</span>
+                <span>支持番茄、长读分享文本与书籍 ID</span>
+              </div>
+              <div className="ink-tomato-input-row">
+                <Link2 className="w-4 h-4" aria-hidden="true" />
+                <input
+                  type="text"
+                  placeholder="粘贴小说分享文本、链接或书籍 ID"
+                  value={inputUrl}
+                  onChange={(e) => setInputUrl(e.target.value)}
+                  disabled={loading || !!progress}
+                  aria-label="粘贴小说分享文本、链接或书籍 ID"
+                />
+                {!progress && (
+                  <button type="button" onClick={handleStartImport} disabled={loading || !inputUrl.trim()}>
+                    {loading ? <Download className="w-4 h-4 animate-pulse" /> : <ArrowRight className="w-4 h-4" />}
+                    {loading ? '解析中' : '开始导入'}
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {parsedAnalysis && !progress && (
+              <section className="ink-tomato-analysis" aria-label="链接识别结果">
+                <span className="ink-tomato-analysis-title">已识别</span>
+                <div>
+                  {parsedAnalysis.extractedUrl && (
+                    <p><Link2 className="w-3.5 h-3.5" /><span>{parsedAnalysis.extractedUrl}</span></p>
+                  )}
+                  {parsedAnalysis.titleHint && (
+                    <p><BookOpen className="w-3.5 h-3.5" /><span>《{parsedAnalysis.titleHint}》</span></p>
+                  )}
+                  {parsedAnalysis.platform === 'changdunovel_share' && <small>长读分享链接会自动解析跳转地址</small>}
+                </div>
+              </section>
+            )}
+
+            {!progress && (
+              <section className="ink-tomato-samples" aria-label="示例链接">
+                <span>示例</span>
+                <button type="button" onClick={() => setInputUrl('推荐一部好书《神通者》https://changdunovel.com/t/BTRdctuGVyI/')}>《神通者》长读分享</button>
+                <button type="button" onClick={() => setInputUrl('https://fanqienovel.com/page/7665193065501445145')}>番茄直连</button>
+              </section>
+            )}
+
+            {error && (
+              <div className="ink-tomato-notice" role="alert">
+                <AlertCircle className="w-4 h-4" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {progress && (
+              <section className="ink-tomato-progress" aria-live="polite">
+                <div className="ink-tomato-progress-heading">
+                  <div>
+                    {progress.isComplete ? <CheckCircle2 className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+                    <span>{progress.isComplete ? '全本抓取完成' : progress.statusText || '正在抓取章节'}</span>
+                  </div>
+                  <strong>{progress.completedChapters} / {totalChapters} 章</strong>
+                </div>
+                <div className="ink-tomato-meter" aria-label={`导入进度 ${progressPercent}%`}>
+                  <span style={{ width: `${progressPercent}%` }} />
+                </div>
+                <p>当前章节：{progress.currentChapterTitle || '正在准备章节目录'}</p>
+
+                {progress.error && (
+                  <button type="button" className="ink-tomato-retry" onClick={handleRetryImport} disabled={loading}>
+                    {loading ? '正在重试' : '重新尝试导入'}
+                  </button>
+                )}
+
+                <div className="ink-tomato-progress-actions">
+                  <button type="button" className="is-solid" onClick={handleOpenReaderNow} disabled={!importedBook || !progress.isComplete}>
+                    <ArrowRight className="w-4 h-4" />
+                    {progress.isComplete ? '进入阅读' : '等待全本完成'}
+                  </button>
+                  <button type="button" onClick={handleExportTxt} disabled={!progress.completedChapters}>
+                    <FileDown className="w-4 h-4" /> 下载 TXT
+                  </button>
+                </div>
+              </section>
+            )}
+          </main>
+
+          <footer className="ink-tomato-footer">
+            <button type="button" onClick={onClose}>{progress ? '完成并返回书架' : '取消'}</button>
+          </footer>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 font-sans">

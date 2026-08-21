@@ -1,0 +1,65 @@
+- generic [ref=e333]:
+  - generic [ref=e334]:
+    - generic [ref=e335]:
+      - button "返回书架" [ref=e336]
+      - generic [ref=e339]:
+        - heading "庆余年 · 精选篇章" [level=1] [ref=e340]
+        - paragraph [ref=e341]: 第一章 牛栏街前杀机现
+    - generic [ref=e342]:
+      - button "全文搜索" [ref=e343]
+      - button "目录与高亮" [ref=e347]
+      - button "添加书签" [ref=e349]
+      - button "阅读设置" [active] [ref=e352]
+  - generic [ref=e357]:
+    - generic [ref=e358]:
+      - heading "第一章 牛栏街前杀机现" [level=2] [ref=e359]
+      - paragraph [ref=e360]: 字数：320 字 · 进度：33%
+    - generic [ref=e361]:
+      - paragraph [ref=e362]: 阳光正烈，晒得京都牛栏街两旁的青石板路发烫。
+      - paragraph [ref=e363]: 范闲坐在马车里，手里把玩着一块小小的监察院腰牌，耳边听着滕梓荆絮絮叨叨地说着京都各大酒楼的招牌菜。
+      - paragraph [ref=e364]: “等办完这桩差事，咱们去一石居吃醉仙鸭，我请客。”滕梓荆笑着拉了拉缰绳。
+      - paragraph [ref=e365]: 便在此时，范闲心中毫无由头地升起一股极强烈的警兆！那是自幼在澹州海边悬崖上、跟在五竹叔铁钎下死里逃生练就出的野兽直觉！
+      - paragraph [ref=e366]: “小心！”
+      - paragraph [ref=e367]: 范闲暴喝一声，一把扯住滕梓荆的衣领向后疾退！
+      - paragraph [ref=e368]: 轰！
+      - paragraph [ref=e369]: 一根碗口粗细的破甲重箭，携带着摧枯拉朽的恐怖风雷之声，瞬间贯穿了坚硬的梨木车厢，直接将车夫座炸成了漫天木屑！
+      - paragraph [ref=e370]: 两名身材魁梧、面容阴鸷的北齐重甲刺客，手持巨大的开山刀，自街角酒楼二层破窗而降，刀芒如雪，直劈范闲面门！
+    - generic [ref=e371]:
+      - button "上一章" [disabled] [ref=e372]
+      - generic [ref=e375]: 1 / 3 章
+      - button "下一章" [ref=e376]
+  - generic [ref=e379]:
+    - generic [ref=e380]:
+      - generic [ref=e381]: 第一章 牛栏街前杀机现
+      - generic [ref=e382]: ·
+      - generic [ref=e383]: 33%
+    - slider [ref=e385] [cursor=pointer]: "0"
+  - generic [ref=e386]:
+    - generic [ref=e387]:
+      - generic [ref=e388]: 排版与主题设置
+      - button [ref=e389]
+    - generic [ref=e393]:
+      - text: 阅读主题
+      - generic [ref=e394]:
+        - button "素雅" [ref=e395]
+        - button "竹简" [ref=e396]
+        - button "水墨" [ref=e397]
+        - button "夜读" [ref=e398]
+        - button "E-Ink" [ref=e399]
+    - generic [ref=e400]:
+      - generic [ref=e401]:
+        - generic [ref=e402]: 字号大小
+        - generic [ref=e403]: 18 px
+      - generic [ref=e404]:
+        - button "A-" [ref=e405]
+        - slider [ref=e406] [cursor=pointer]: "18"
+        - button "A+" [ref=e407]
+    - generic [ref=e408]:
+      - generic [ref=e409]:
+        - generic [ref=e410]: 行距调节
+        - generic [ref=e411]: 1.8 倍
+      - generic [ref=e412]:
+        - button "紧凑" [ref=e413]
+        - button "适中" [ref=e414]
+        - button "宽松" [ref=e415]
+    - button "从头开始阅读" [ref=e417]

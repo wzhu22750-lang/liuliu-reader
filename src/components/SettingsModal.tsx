@@ -12,6 +12,11 @@ import {
   Database,
   KeyRound,
   FileSpreadsheet,
+  BookOpen,
+  Globe2,
+  FolderOpen,
+  Palette,
+  ChevronRight,
 } from 'lucide-react';
 import {
   getAISettings,
@@ -26,9 +31,11 @@ import { AISettings, ReaderSettings, BackupData } from '../types';
 interface Props {
   onClose: () => void;
   onSettingsUpdated?: () => void;
+  theme?: ReaderSettings['theme'];
+  onThemeChange?: (theme: ReaderSettings['theme']) => void | Promise<void>;
 }
 
-export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated }) => {
+export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, theme, onThemeChange }) => {
   const [aiSettings, setAiSettings] = useState<AISettings>({
     apiBaseUrl: '',
     apiKey: '',
@@ -39,6 +46,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated }) =
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     Promise.all([getAISettings(), getReaderSettings()]).then(([ai, reader]) => {
@@ -131,6 +139,81 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated }) =
     };
     reader.readAsText(file);
   };
+
+  if ((theme === 'ink' || theme === 'claude') && readerSettings) {
+    const selectTheme = async (nextTheme: ReaderSettings['theme']) => {
+      const next = { ...readerSettings, theme: nextTheme };
+      setReaderSettings(next);
+      await saveReaderSettings(next);
+      await onThemeChange?.(nextTheme);
+    };
+
+    return (
+      <section className={`${theme === 'claude' ? 'claude-settings-page' : 'ink-settings-page'} fixed inset-0 z-50 overflow-y-auto`}>
+        <header className="ink-page-header">
+          <div>
+            <p className="ink-eyebrow">LIULIU READER</p>
+            <h1>我的</h1>
+          </div>
+          <button type="button" className="ink-icon-button" onClick={onClose} aria-label="返回书架"><X className="w-6 h-6" /></button>
+        </header>
+
+        <main className="ink-page-main ink-settings-content">
+          <div className="ink-settings-group">
+            <button type="button" className="ink-setting-row" onClick={() => setShowAdvanced((value) => !value)}>
+              <BookOpen className="ink-setting-icon" />
+              <span><strong>书源管理</strong><small>导入、整理和管理本地书籍</small></span><ChevronRight className="ink-setting-arrow" />
+            </button>
+            <button type="button" className="ink-setting-row" onClick={() => setShowAdvanced((value) => !value)}>
+              <Settings className="ink-setting-icon" />
+              <span><strong>阅读与规则</strong><small>防剧透范围、选段与阅读偏好</small></span><ChevronRight className="ink-setting-arrow" />
+            </button>
+            <div className="ink-setting-row ink-theme-row">
+              <Palette className="ink-setting-icon" />
+              <span><strong>主题模式</strong><small>选择应用的阅读界面</small></span>
+              <select value={readerSettings.theme} onChange={(event) => selectTheme(event.target.value as ReaderSettings['theme'])} aria-label="主题模式">
+                <option value="claude">Claude风</option><option value="ink">E-Ink墨水屏</option>
+              </select>
+            </div>
+            <label className="ink-setting-row">
+              <Globe2 className="ink-setting-icon" />
+              <span><strong>智能选段</strong><small>按句号、感叹号或问号吸附完整句子</small></span>
+              <input type="checkbox" checked={readerSettings.autoSnapSentence} onChange={async (event) => { const next = { ...readerSettings, autoSnapSentence: event.target.checked }; setReaderSettings(next); await saveReaderSettings(next); }} aria-label="智能选段" />
+            </label>
+          </div>
+
+          <h2 className="ink-group-title">设置</h2>
+          <div className="ink-settings-group">
+            <button type="button" className="ink-setting-row" onClick={onClose}>
+              <FolderOpen className="ink-setting-icon" />
+              <span><strong>本地书籍管理</strong><small>返回书架，导入或删除本地书籍</small></span><ChevronRight className="ink-setting-arrow" />
+            </button>
+            <button type="button" className="ink-setting-row" onClick={() => handleExportBackup('full')}>
+              <HardDrive className="ink-setting-icon" />
+              <span><strong>备份与恢复</strong><small>导出完整离线备份，保留阅读数据</small></span><ChevronRight className="ink-setting-arrow" />
+            </button>
+          </div>
+
+          <button type="button" className="ink-advanced-toggle" onClick={() => setShowAdvanced((value) => !value)}>
+            {showAdvanced ? '收起高级设置' : '打开 AI 与备份高级设置'}
+          </button>
+
+          {showAdvanced && (
+            <div className="ink-advanced-panel">
+              <h2>AI 服务</h2>
+              <label>API Base URL<input value={aiSettings.apiBaseUrl} onChange={(event) => setAiSettings({ ...aiSettings, apiBaseUrl: event.target.value })} placeholder="留空则使用默认后端" /></label>
+              <label>API Key<input type="password" value={aiSettings.apiKey} onChange={(event) => setAiSettings({ ...aiSettings, apiKey: event.target.value })} placeholder="仅保存在本地" /></label>
+              <label>模型名称<input value={aiSettings.modelName} onChange={(event) => setAiSettings({ ...aiSettings, modelName: event.target.value })} /></label>
+              <div className="ink-advanced-actions"><button type="button" onClick={handleTestAIConnection}>测试连接</button><button type="button" onClick={handleSaveAISettings}>保存设置</button></div>
+              <div className="ink-backup-actions"><button type="button" onClick={() => handleExportBackup('full')}>完整备份</button><label>恢复备份<input type="file" accept=".json" onChange={handleRestoreFile} /></label></div>
+              {testStatus && <p className="ink-status">{testStatus === 'success' ? '连接正常' : testStatus === 'testing' ? '正在测试…' : testStatus}</p>}
+              {restoreMessage && <p className="ink-status">{restoreMessage}</p>}
+            </div>
+          )}
+        </main>
+      </section>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 font-sans">

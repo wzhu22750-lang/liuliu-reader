@@ -16,7 +16,7 @@ const DB_VERSION = 1;
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.8,
-  theme: 'light',
+  theme: 'claude',
   renderMode: 'scroll',
   spoilerScope: 'current',
   lastHighlightStyle: 'amber',
@@ -398,7 +398,12 @@ export async function getReaderSettings(): Promise<ReaderSettings> {
     const store = tx.objectStore('app_settings');
     const request = store.get('reader_settings');
     request.onsuccess = () => {
-      resolve({ ...DEFAULT_READER_SETTINGS, ...(request.result?.value || {}) });
+      const settings = { ...DEFAULT_READER_SETTINGS, ...(request.result?.value || {}) } as ReaderSettings & { theme?: string };
+      // Old theme identifiers are intentionally retired. Existing readers safely land on Claude style.
+      if (settings.theme !== 'ink' && settings.theme !== 'claude') {
+        settings.theme = 'claude';
+      }
+      resolve(settings as ReaderSettings);
     };
     request.onerror = () => resolve(DEFAULT_READER_SETTINGS);
   });
