@@ -56,3 +56,39 @@ dispatch
 ```
 
 它会进入 Rust 的 `AppState::dispatch_runtime`。目前还没有把具体业务 action 写死，因为 action 名称和每个 payload 的字段仍需要从前端 bundle 或运行时请求中逐项确认。
+
+## 已恢复的业务 action
+
+通过 `dispatch_runtime` 的字符串比较和对应后端调用，已恢复第一批 action：
+
+```text
+search
+get_job
+history
+preview_batch
+clear_history
+bookshelf_add
+retry_download
+remove_history
+pick_directory
+bookshelf_list
+clear_book_cache
+chapter_content
+create_download
+bootstrap
+list_jobs
+pause_job
+open_path
+resume_job
+cancel_job
+book_detail
+create_batch_download
+start_update
+browse_directories
+bookshelf_progress
+get_update_status
+get_mobile_status
+save_download_preferences
+```
+
+这些 action 都通过同一个 Tauri command `dispatch` 调用，不是 27 个独立 command。

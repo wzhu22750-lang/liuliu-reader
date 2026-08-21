@@ -33,6 +33,38 @@ export interface FanqieDispatchEnvelope {
   state?: Record<string, unknown>;
 }
 
+export const FANQIE_ACTIONS = {
+  search: 'search',
+  getJob: 'get_job',
+  history: 'history',
+  previewBatch: 'preview_batch',
+  clearHistory: 'clear_history',
+  bookshelfAdd: 'bookshelf_add',
+  retryDownload: 'retry_download',
+  removeHistory: 'remove_history',
+  pickDirectory: 'pick_directory',
+  bookshelfList: 'bookshelf_list',
+  clearBookCache: 'clear_book_cache',
+  chapterContent: 'chapter_content',
+  createDownload: 'create_download',
+  bootstrap: 'bootstrap',
+  listJobs: 'list_jobs',
+  pauseJob: 'pause_job',
+  openPath: 'open_path',
+  resumeJob: 'resume_job',
+  cancelJob: 'cancel_job',
+  bookDetail: 'book_detail',
+  createBatchDownload: 'create_batch_download',
+  startUpdate: 'start_update',
+  browseDirectories: 'browse_directories',
+  bookshelfProgress: 'bookshelf_progress',
+  getUpdateStatus: 'get_update_status',
+  getMobileStatus: 'get_mobile_status',
+  saveDownloadPreferences: 'save_download_preferences',
+} as const;
+
+export type FanqieAction = (typeof FANQIE_ACTIONS)[keyof typeof FANQIE_ACTIONS];
+
 export interface FanqieNativeProgress {
   job_id?: string;
   status?: string;
@@ -65,6 +97,22 @@ export async function invokeFanqieDispatch<T>(envelope: FanqieDispatchEnvelope):
     throw new Error('番茄器 dispatch command 不可用');
   }
   return invokeTauri<T>(command, envelope as unknown as Record<string, unknown>);
+}
+
+export function createFanqieActionRequest(
+  action: FanqieAction,
+  payload?: Record<string, unknown>,
+  state?: Record<string, unknown>,
+): FanqieDispatchEnvelope {
+  return { action, ...(payload ? { payload } : {}), ...(state ? { state } : {}) };
+}
+
+export function invokeFanqieAction<T>(
+  action: FanqieAction,
+  payload?: Record<string, unknown>,
+  state?: Record<string, unknown>,
+): Promise<T> {
+  return invokeFanqieDispatch(createFanqieActionRequest(action, payload, state));
 }
 
 export function isFanqieNativeBackendAvailable(): boolean {
