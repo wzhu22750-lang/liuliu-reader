@@ -28,3 +28,25 @@
 项目采用模块化设计，将**小说来源解析、内容获取、下载、本地书库、阅读器和 AI 能力**进行解耦，使未来可以在不改变核心阅读体验的情况下持续增加新的小说来源和功能。
 
 **溜溜读书 —— 让阅读不止于阅读。**
+
+## 本地完整正文 Provider
+
+网页 Reader 在部分书籍的前若干目录项之后只返回预览。项目支持使用本地 `Tomato-Novel-Downloader` sidecar 获取完整正文，sidecar 只监听本机地址，下载缓存保存在未纳入 Git 的 `.local/tnd-provider` 目录。
+
+首次安装：
+
+```bash
+npm run provider:install
+```
+
+本地 `.env` 配置：
+
+```env
+FANQIE_CONTENT_API_ENDPOINTS="tnd-sidecar://local"
+TND_PROVIDER_PORT="18429"
+TND_PROVIDER_ROOT=".local/tnd-provider"
+```
+
+启动应用后不需要单独启动 Provider。遇到网页锁定预览时，服务端会自动启动 sidecar、按章节位置获取正文、从 chapter_id 缓存读取 XHTML，然后继续执行完整性检查和字体解码。
+
+Provider Release、版本和校验信息记录在 `THIRD_PARTY_NOTICES.md`。请仅处理你有权保存和阅读的内容，并遵守内容平台的服务条款。
