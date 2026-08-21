@@ -5,6 +5,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // Tauri Android serves the bundle from an asset URL, so root-relative URLs
+    // would escape the APK asset namespace.
+    base: './',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
