@@ -1,0 +1,30 @@
+- generic [ref=f4e80]:
+  - banner [ref=f4e81]:
+    - generic [ref=f4e82]:
+      - paragraph [ref=f4e83]: LIULIU READER
+      - heading "摘抄" [level=1] [ref=f4e84]
+      - paragraph [ref=f4e85]: 已留存 1 条文字片段
+    - button "返回书架" [ref=f4e86]
+  - main [ref=f4e89]:
+    - textbox "搜索摘抄" [ref=f4e94]:
+      - /placeholder: 搜索摘抄、书名或心得
+    - generic "书籍筛选" [ref=f4e95]:
+      - button "全部" [ref=f4e96]
+      - button "逃避自由" [ref=f4e97]
+    - generic [ref=f4e98]:
+      - generic [ref=f4e99]:
+        - generic [ref=f4e100]: 文字片段
+        - generic [ref=f4e101]: 1 条
+      - article [ref=f4e103]:
+        - button "《逃避自由》 第一章 自由——一个心理学问题吗？" [ref=f4e104]:
+          - generic [ref=f4e105]: 《逃避自由》
+          - generic [ref=f4e106]: 第一章 自由——一个心理学问题吗？
+        - blockquote [ref=f4e107]: “自由尽管给现代人带来了独立与理性，但也使他孤立并由此感到焦虑与无能为力。”
+        - paragraph [ref=f4e108]: 弗洛姆揭示了现代性焦虑的心理学本质：当外在束缚瓦解后，孤独感成为个体必须面对的终极命题。
+        - generic [ref=f4e109]:
+          - button "编辑心得" [ref=f4e110]
+          - button "分享" [ref=f4e113]
+          - button "删除摘抄" [ref=f4e120]
+  - navigation "主导航" [ref=f4e124]:
+    - button "书架" [ref=f4e125]
+    - button "摘抄" [ref=f4e129]
