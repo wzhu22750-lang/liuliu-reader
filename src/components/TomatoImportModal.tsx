@@ -7,7 +7,6 @@ import {
   TomatoFetchProgress,
 } from '../parsers/tomatoFetcher';
 import { Book } from '../types';
-import { getBookById } from '../db/indexedDB';
 
 interface Props {
   onSuccess: (book: Book, openDirectly?: boolean) => void;
@@ -50,29 +49,6 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
     }
   };
 
-<<<<<<< HEAD
-  const handleExportTxt = async () => {
-    if (!importedBook) return;
-
-    // 导出前重新读取 IndexedDB，避免使用导入开始时的旧快照或某次进度回调的部分数据。
-    const latestBook = await getBookById(importedBook.id);
-    if (!latestBook) {
-      setError('书籍数据已不存在，请重新导入');
-      return;
-    }
-
-    const total = latestBook.totalChapters || latestBook.fetchStatus?.total || latestBook.chapters.length;
-    const completed = latestBook.chapters.length;
-    if (latestBook.fetchStatus?.isFetching || completed < total) {
-      setError(`全本仍在抓取中，当前仅有 ${completed}/${total} 章，完成后再导出可避免文件不完整`);
-      return;
-    }
-
-    const chaptersToExport = [...latestBook.chapters]
-      .sort((a, b) => a.index - b.index)
-      .map((chapter) => ({ title: chapter.title, content: chapter.content }));
-    downloadNovelAsTxt(latestBook.title, latestBook.author, chaptersToExport);
-=======
   const handleRetryImport = async () => {
     if (!inputUrl.trim() || loading) return;
     setLoading(true);
@@ -100,7 +76,6 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
     } catch (err: any) {
       setError(err.message || '正文仍包含未解码字符，已阻止导出乱码文件');
     }
->>>>>>> codex/0821error
   };
 
   return (
@@ -276,11 +251,11 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
                 <button
                   type="button"
                   onClick={handleExportTxt}
-                  disabled={!progress.completedChapters || progress.completedChapters < progress.totalChapters || !progress.isComplete}
+                  disabled={!progress.completedChapters}
                   className="px-4 py-2.5 text-xs font-medium bg-white dark:bg-stone-800 hover:bg-[#e8e6df]/50 text-[#141413] dark:text-stone-100 border border-[#e8e6df] dark:border-stone-700 rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <FileDown className="w-4 h-4 text-[#da7756]" />
-                  {progress.isComplete ? '下载为 .TXT 文件' : '等待全本完成后导出'}
+                  下载为 .TXT 文件
                 </button>
               </div>
             </div>

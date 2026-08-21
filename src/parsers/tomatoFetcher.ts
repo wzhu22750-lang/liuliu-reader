@@ -41,7 +41,6 @@ export interface TomatoFetchProgress {
   statusText?: string;
   error?: string;
   chaptersData?: { title: string; content: string }[];
-  failedChapters?: { index: number; title: string; error: string }[];
 }
 
 export interface ParsedUserInput {
@@ -226,38 +225,6 @@ export async function fetchTomatoChapterContent(
   throw lastError || new Error(`章节“${itemId}”获取失败`);
 }
 
-const CHAPTER_FETCH_RETRIES = 3;
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchChapterWithRetry(
-  meta: TomatoChapterMeta,
-  onAttempt?: (attempt: number, error?: string) => void
-): Promise<{ title: string; content: string; wordCount?: number; fontUrl?: string }> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 1; attempt <= CHAPTER_FETCH_RETRIES; attempt++) {
-    try {
-      onAttempt?.(attempt);
-      const data = await fetchTomatoChapterContent(meta.itemId);
-      if (!data.content?.trim()) {
-        throw new Error('章节正文为空');
-      }
-      return data;
-    } catch (error: any) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      onAttempt?.(attempt, lastError.message);
-      if (attempt < CHAPTER_FETCH_RETRIES) {
-        await wait(500 * attempt);
-      }
-    }
-  }
-
-  throw lastError || new Error(`第 ${meta.index + 1} 章获取失败`);
-}
-
 /**
  * 5. 组装整书并导出为 .txt 纯文本文件到本地
  */
@@ -331,13 +298,6 @@ export async function startTomatoNovelImport(
     isComplete: false, chaptersData: [],
   });
 
-<<<<<<< HEAD
-  for (let i = 0; i < initialChaptersMeta.length; i++) {
-    const meta = initialChaptersMeta[i];
-    const chData = await fetchChapterWithRetry(meta);
-    if (chData.fontUrl) {
-      detectedFontUrl = chData.fontUrl;
-=======
   // Sequential requests protect the source and make chapter-level failure diagnostics deterministic.
   for (let i = 0; i < bookInfo.chapters.length; i++) {
     const meta = bookInfo.chapters[i];
@@ -368,7 +328,6 @@ export async function startTomatoNovelImport(
         chaptersData: chapters.map((c) => ({ title: c.title, content: c.content })),
       });
       throw new Error(message);
->>>>>>> codex/0821error
     }
   }
 
@@ -393,116 +352,3 @@ export async function startTomatoNovelImport(
   return newBook;
 }
 
-<<<<<<< HEAD
-/**
- * 异步后台流水线拉取并写入 IndexedDB
- */
-async function runBackgroundChapterPipeline(
-  bookId: string,
-  chaptersMeta: TomatoChapterMeta[],
-  currentLoadedChapters: Chapter[],
-  onProgress?: (progress: TomatoFetchProgress) => void
-) {
-  const failedByIndex = new Map<number, { index: number; title: string; error: string }>();
-
-  const upsertChapter = (chapters: Chapter[], chapter: Chapter): Chapter[] => {
-    const next = chapters.filter((item) => item.index !== chapter.index);
-    next.push(chapter);
-    return next.sort((a, b) => a.index - b.index);
-  };
-
-  let pending = chaptersMeta.slice(currentLoadedChapters.length);
-  // 单章请求已经有 3 次退避重试；整轮结束后再重试 2 轮，覆盖临时限流、代理抖动等情况。
-  for (let round = 0; round < 3 && pending.length > 0; round++) {
-    const nextPending: TomatoChapterMeta[] = [];
-
-    for (const meta of pending) {
-      try {
-        const chData = await fetchChapterWithRetry(meta);
-        const book = await getBookById(bookId);
-        if (!book) return;
-
-        const newChapter: Chapter = {
-          id: `${bookId}_ch_${meta.index}`,
-          index: meta.index,
-          title: chData.title || meta.title,
-          content: chData.content,
-          wordCount: chData.wordCount || chData.content.length,
-          fontUrl: chData.fontUrl,
-        };
-
-        if (chData.fontUrl && !book.fontUrl) book.fontUrl = chData.fontUrl;
-        book.chapters = upsertChapter(book.chapters, newChapter);
-        book.totalChapters = chaptersMeta.length;
-        book.fetchStatus = {
-          total: chaptersMeta.length,
-          completed: book.chapters.length,
-          isFetching: book.chapters.length < chaptersMeta.length,
-        };
-        book.updatedAt = Date.now();
-        await saveBook(book);
-        failedByIndex.delete(meta.index);
-
-        onProgress?.({
-          bookId,
-          totalChapters: chaptersMeta.length,
-          completedChapters: book.chapters.length,
-          currentChapterTitle: newChapter.title,
-          statusText: `正在下载: ${newChapter.title}`,
-          isComplete: book.chapters.length >= chaptersMeta.length,
-          chaptersData: book.chapters.map((chapter) => ({ title: chapter.title, content: chapter.content })),
-          failedChapters: [...failedByIndex.values()],
-        });
-
-        await wait(350);
-      } catch (error: any) {
-        const failure = { index: meta.index, title: meta.title, error: error.message || '获取失败' };
-        failedByIndex.set(meta.index, failure);
-        nextPending.push(meta);
-        console.warn(`Chapter ${meta.index} fetch error on round ${round + 1}:`, failure.error);
-      }
-    }
-
-    pending = nextPending;
-    if (pending.length > 0) {
-      const book = await getBookById(bookId);
-      onProgress?.({
-        bookId,
-        totalChapters: chaptersMeta.length,
-        completedChapters: book?.chapters.length || 0,
-        currentChapterTitle: pending[0].title,
-        statusText: `正在重试 ${pending.length} 个未完成章节（第 ${round + 2} 轮）`,
-        isComplete: false,
-        chaptersData: book?.chapters.map((chapter) => ({ title: chapter.title, content: chapter.content })),
-        failedChapters: [...failedByIndex.values()],
-      });
-      await wait(1000 * (round + 1));
-    }
-  }
-
-  const finalBook = await getBookById(bookId);
-  if (!finalBook) return;
-
-  const completed = finalBook.chapters.length;
-  finalBook.fetchStatus = {
-    total: chaptersMeta.length,
-    completed,
-    isFetching: completed < chaptersMeta.length,
-  };
-  finalBook.updatedAt = Date.now();
-  await saveBook(finalBook);
-
-  onProgress?.({
-    bookId,
-    totalChapters: chaptersMeta.length,
-    completedChapters: completed,
-    currentChapterTitle: completed >= chaptersMeta.length ? '全本已就绪' : '部分章节获取失败，可稍后重试',
-    statusText: completed >= chaptersMeta.length ? '全本抓取完成' : `仍有 ${chaptersMeta.length - completed} 章未获取`,
-    isComplete: completed >= chaptersMeta.length,
-    chaptersData: finalBook.chapters.map((chapter) => ({ title: chapter.title, content: chapter.content })),
-    failedChapters: [...failedByIndex.values()],
-  });
-}
-
-=======
->>>>>>> codex/0821error

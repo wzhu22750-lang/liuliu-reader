@@ -453,13 +453,6 @@ app.get('/api/tomato/book-info', async (req, res) => {
     }
   }
 
-  // 不要把真实书籍的目录请求失败伪装成 10 章 demo。否则前端会把假目录当成全本，
-  // 后续导出只能得到一部分内容且无法判断数据是否可信。
-  if (!targetId.startsWith('fanqie_custom_') && !targetId.startsWith('demo_')) {
-    res.status(502).json({ error: '未能获取完整小说目录，请稍后重试或更换可访问的链接' });
-    return;
-  }
-
   // Fallback / standard rich mocked structure for demo links or offline testing
   const fallbackChapters = [
     { itemId: 'demo_1', title: '第一章 潜龙在渊', index: 0 },
@@ -629,10 +622,6 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
     webError = error.message;
   }
 
-<<<<<<< HEAD
-  // 真实章节获取失败时必须返回错误，不能生成占位正文并让导出误以为成功。
-  res.status(502).json({ error: '未能获取该章节正文，请稍后重试' });
-=======
   const effectiveBookId = cleanBookId || webSnapshot?.bookId;
   const providerResult = await fetchConfiguredChapterProvider(effectiveBookId, cleanItemId, cleanChapterIndex);
   if (providerResult.chapter) {
@@ -683,7 +672,6 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
     actualWordCount: actual,
     providerErrors: providerResult.errors,
   });
->>>>>>> codex/0821error
 });
 
 // Legacy backward-compatible endpoint
