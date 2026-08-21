@@ -14,6 +14,8 @@ use commands::AppState;
 use db::Store;
 use error::AppError;
 use source::fanqie::FanqieClient;
+use source::official::OfficialApi;
+use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,9 +30,14 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let store = Store::open(dir.join("liuliu.sqlite"))?;
             let fanqie = FanqieClient::new()?;
+            let official_http = reqwest::Client::builder()
+                .user_agent(source::official::OFFICIAL_UA)
+                .timeout(std::time::Duration::from_secs(20))
+                .build()?;
             app.manage(AppState {
                 store: Arc::new(store),
                 fanqie: Arc::new(fanqie),
+                official: Arc::new(Mutex::new(OfficialApi::new(official_http))),
             });
             Ok(())
         })

@@ -76,7 +76,10 @@ impl FanqieClient {
             return Ok(trimmed.to_string());
         }
         if let Some(url) = capture_url(trimmed) {
-            if url.contains("changdunovel.com") || url.contains("zlink.fqnovel.com") || url.contains("/t/") {
+            if url.contains("changdunovel.com")
+                || url.contains("zlink.fqnovel.com")
+                || url.contains("/t/")
+            {
                 let response = self
                     .http
                     .get(&url)
@@ -141,11 +144,15 @@ impl FanqieClient {
         let page_data = state.get("page").cloned().unwrap_or(Value::Null);
         let title = first_string(&page_data, &["bookName", "book_name"])
             .unwrap_or_else(|| format!("番茄小说_{book_id}"));
-        let author = first_string(&page_data, &["authorName", "author"]).unwrap_or_else(|| "网络作者".into());
+        let author = first_string(&page_data, &["authorName", "author"])
+            .unwrap_or_else(|| "网络作者".into());
         let cover_url = first_string(&page_data, &["thumbUrl", "thumbUri"]);
         let description = first_string(&page_data, &["abstract", "description"]);
         let mut chapters = Vec::new();
-        if let Some(volumes) = page_data.get("chapterListWithVolume").and_then(|v| v.as_array()) {
+        if let Some(volumes) = page_data
+            .get("chapterListWithVolume")
+            .and_then(|v| v.as_array())
+        {
             for volume in volumes {
                 if let Some(list) = volume.as_array() {
                     for chapter in list {
@@ -174,12 +181,20 @@ impl FanqieClient {
         })
     }
 
-    pub async fn chapter(&self, book_id: &str, item_id: &str, index: i64) -> AppResult<ChapterSnapshot> {
+    pub async fn chapter(
+        &self,
+        book_id: &str,
+        item_id: &str,
+        index: i64,
+    ) -> AppResult<ChapterSnapshot> {
         let web = self.fetch_web_chapter(item_id).await?;
         if chapter_complete(&web) {
             return Ok(web);
         }
-        if let Some(provider) = self.fetch_plaintext_provider(book_id, item_id, index).await? {
+        if let Some(provider) = self
+            .fetch_plaintext_provider(book_id, item_id, index)
+            .await?
+        {
             let mut merged = provider;
             if merged.title.is_empty() {
                 merged.title = web.title;
@@ -220,7 +235,11 @@ impl FanqieClient {
         Ok(ChapterSnapshot {
             item_id: item_id.to_string(),
             title: first_string(&chapter, &["title"]).unwrap_or_else(|| "正文章节".into()),
-            content: normalize_novel_content(first_string(&chapter, &["content"]).as_deref().unwrap_or("")),
+            content: normalize_novel_content(
+                first_string(&chapter, &["content"])
+                    .as_deref()
+                    .unwrap_or(""),
+            ),
             expected_word_count: first_i64(&chapter, &["chapterWordNumber", "chapter_word_number"]),
             is_chapter_lock: chapter
                 .get("isChapterLock")
@@ -301,12 +320,24 @@ pub fn normalize_novel_content(value: &str) -> String {
         .unwrap()
         .replace_all(value, "")
         .into_owned();
-    text = Regex::new(r"(?i)</p\s*>").unwrap().replace_all(&text, "\n\n").into_owned();
-    text = Regex::new(r"(?i)<br\s*/?\s*>").unwrap().replace_all(&text, "\n").into_owned();
+    text = Regex::new(r"(?i)</p\s*>")
+        .unwrap()
+        .replace_all(&text, "\n\n")
+        .into_owned();
+    text = Regex::new(r"(?i)<br\s*/?\s*>")
+        .unwrap()
+        .replace_all(&text, "\n")
+        .into_owned();
     text = html_escape::decode_html_entities(&text).into_owned();
-    text = Regex::new(r"<[^>]+>").unwrap().replace_all(&text, "").into_owned();
+    text = Regex::new(r"<[^>]+>")
+        .unwrap()
+        .replace_all(&text, "")
+        .into_owned();
     text = text.replace('\r', "");
-    text = Regex::new(r"\n{3,}").unwrap().replace_all(&text, "\n\n").into_owned();
+    text = Regex::new(r"\n{3,}")
+        .unwrap()
+        .replace_all(&text, "\n\n")
+        .into_owned();
     text.trim().to_string()
 }
 
@@ -324,11 +355,13 @@ fn parse_provider_payload(payload: &Value, item_id: &str) -> Option<ChapterSnaps
     }
     let many = candidates.len() > 1;
     for candidate in candidates {
-        let id = first_string(candidate, &["item_id", "itemId", "id"]).unwrap_or_else(|| item_id.to_string());
+        let id = first_string(candidate, &["item_id", "itemId", "id"])
+            .unwrap_or_else(|| item_id.to_string());
         if id != item_id && many {
             continue;
         }
-        let content = first_string(candidate, &["content", "origin_content", "text"]).unwrap_or_default();
+        let content =
+            first_string(candidate, &["content", "origin_content", "text"]).unwrap_or_default();
         let content = normalize_novel_content(&content);
         if content.is_empty() || content == "Invalid" {
             continue;
@@ -354,7 +387,8 @@ fn build_provider_url(endpoint: &str, book_id: &str, item_id: &str, index: i64) 
             .replace("{book_id}", book_id)
             .replace("{chapter_index}", &index.to_string());
     }
-    let mut url = reqwest::Url::parse(endpoint).unwrap_or_else(|_| reqwest::Url::parse("https://invalid.local").unwrap());
+    let mut url = reqwest::Url::parse(endpoint)
+        .unwrap_or_else(|_| reqwest::Url::parse("https://invalid.local").unwrap());
     if url.path().contains("batch_full") || url.path().contains("batch_chapter") {
         url.query_pairs_mut().append_pair("item_ids", item_id);
     } else {
@@ -411,7 +445,12 @@ fn capture_url(input: &str) -> Option<String> {
         .find(input)
         .map(|m| {
             m.as_str()
-                .trim_end_matches(|c: char| matches!(c, '。' | '，' | '！' | '？' | '、' | ')' | '(' | '>' | '<' | ';' | ','))
+                .trim_end_matches(|c: char| {
+                    matches!(
+                        c,
+                        '。' | '，' | '！' | '？' | '、' | ')' | '(' | '>' | '<' | ';' | ','
+                    )
+                })
                 .to_string()
         })
 }
@@ -487,16 +526,19 @@ fn search_hits_from_state(state: &Value) -> Vec<SearchHit> {
         match value {
             Value::Array(arr) => stack.extend(arr.iter()),
             Value::Object(map) => {
-                let book_id = map
-                    .get("book_id")
-                    .or(map.get("bookId"))
-                    .and_then(|v| v.as_str().map(|s| s.to_string()).or_else(|| v.as_i64().map(|n| n.to_string())));
+                let book_id = map.get("book_id").or(map.get("bookId")).and_then(|v| {
+                    v.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| v.as_i64().map(|n| n.to_string()))
+                });
                 if let Some(book_id) = book_id {
                     if Regex::new(r"^\d{10,25}$").unwrap().is_match(&book_id) {
                         hits.push(SearchHit {
                             book_id,
-                            title: first_string(value, &["book_name", "bookName", "title"]).unwrap_or_else(|| "未命名".into()),
-                            author: first_string(value, &["author", "authorName"]).unwrap_or_else(|| "未知作者".into()),
+                            title: first_string(value, &["book_name", "bookName", "title"])
+                                .unwrap_or_else(|| "未命名".into()),
+                            author: first_string(value, &["author", "authorName"])
+                                .unwrap_or_else(|| "未知作者".into()),
                             cover_url: first_string(value, &["thumb_url", "thumbUrl", "cover"]),
                             description: first_string(value, &["abstract", "description"]),
                         });

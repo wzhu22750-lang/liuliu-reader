@@ -7,14 +7,17 @@ use crate::download::import_fanqie_book;
 use crate::error::AppResult;
 use crate::fs_export::{default_export_path, write_txt};
 use crate::models::{
-    AIInterpretation, Bookmark, Book, BookProgress, Excerpt, Highlight, ReaderSettings, SearchHit,
+    AIInterpretation, Book, BookProgress, Bookmark, Excerpt, Highlight, ReaderSettings, SearchHit,
 };
 use crate::source::fanqie::FanqieClient;
 use crate::source::local::parse_txt;
+use crate::source::official::OfficialApi;
+use tokio::sync::Mutex;
 
 pub struct AppState {
     pub store: Arc<Store>,
     pub fanqie: Arc<FanqieClient>,
+    pub official: Arc<Mutex<OfficialApi>>,
 }
 
 #[tauri::command]
@@ -86,7 +89,11 @@ pub fn delete_excerpt(state: State<AppState>, id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn update_excerpt_thought(state: State<AppState>, id: String, thought: String) -> AppResult<()> {
+pub fn update_excerpt_thought(
+    state: State<AppState>,
+    id: String,
+    thought: String,
+) -> AppResult<()> {
     let mut list = state.store.list_excerpts()?;
     if let Some(item) = list.iter_mut().find(|e| e.id == id) {
         item.thought = Some(thought);
@@ -159,12 +166,45 @@ pub fn import_txt(state: State<AppState>, file_name: String, content: String) ->
 
 #[tauri::command]
 pub async fn search_fanqie(state: State<'_, AppState>, query: String) -> AppResult<Vec<SearchHit>> {
-    state.fanqie.search(&query).await
+    match state.fanqie.search(&query).await {
+        Ok(hits) => Ok(hits),
+        Err(web_error) => {
+            let mut api = state.official.lock().await;
+            match api.search(&query).await {
+                Ok(hits) => Ok(hits
+                    .into_iter()
+                    .map(|hit| SearchHit {
+                        book_id: hit.book_id,
+                        title: hit.title,
+                        author: hit.author,
+                        cover_url: hit.cover_url,
+                        description: hit.description,
+                    })
+                    .collect()),
+                Err(official_error) => Err(format!(
+                    "网页搜索和官方搜索均失败：网页={}；官方={}",
+                    web_error, official_error
+                )
+                .into()),
+            }
+        }
+    }
 }
 
 #[tauri::command]
-pub async fn import_fanqie(app: AppHandle, state: State<'_, AppState>, input: String) -> AppResult<Book> {
-    import_fanqie_book(app, state.store.clone(), state.fanqie.clone(), input).await
+pub async fn import_fanqie(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+) -> AppResult<Book> {
+    import_fanqie_book(
+        app,
+        state.store.clone(),
+        state.fanqie.clone(),
+        state.official.clone(),
+        input,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -173,7 +213,10 @@ pub fn export_book_txt(app: AppHandle, state: State<AppState>, id: String) -> Ap
         .store
         .get_book(&id)?
         .ok_or_else(|| crate::error::AppError::from("书籍不存在"))?;
-    let dir = app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir());
+    let dir = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| std::env::temp_dir());
     let dest = default_export_path(dir.join("exports"), &book);
     let path = write_txt(&book, dest)?;
     Ok(path.to_string_lossy().into_owned())

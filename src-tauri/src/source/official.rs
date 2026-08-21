@@ -61,9 +61,8 @@ const VERSION_CODE: &str = "71332";
 const VERSION_NAME: &str = "7.1.3.32";
 const LADON_APPEND: &[u8; 4] = b"1967";
 const ARGUS_SIGN_KEY: [u8; 32] = [
-    0xac, 0x1a, 0xda, 0xae, 0x95, 0xa7, 0xaf, 0x94, 0xa5, 0x11, 0x4a, 0xb3, 0xb3, 0xa9, 0x7d,
-    0xd8, 0x00, 0x50, 0xaa, 0x0a, 0x39, 0x31, 0x4c, 0x40, 0x52, 0x8c, 0xae, 0xc9, 0x52, 0x56,
-    0xc2, 0x8c,
+    0xac, 0x1a, 0xda, 0xae, 0x95, 0xa7, 0xaf, 0x94, 0xa5, 0x11, 0x4a, 0xb3, 0xb3, 0xa9, 0x7d, 0xd8,
+    0x00, 0x50, 0xaa, 0x0a, 0x39, 0x31, 0x4c, 0x40, 0x52, 0x8c, 0xae, 0xc9, 0x52, 0x56, 0xc2, 0x8c,
 ];
 
 // ---------------------------------------------------------------------------
@@ -249,8 +248,8 @@ pub fn decrypt_chapter_content(encoded: &str, content_key: &[u8]) -> Result<Stri
     let iv = &decoded[..16];
     let cipher = &decoded[16..];
     let buf = cipher.to_vec();
-    let dec = Aes128Cbc::new_from_slices(content_key, iv)
-        .map_err(|e| format!("AES 初始化失败: {e}"))?;
+    let dec =
+        Aes128Cbc::new_from_slices(content_key, iv).map_err(|e| format!("AES 初始化失败: {e}"))?;
     let plain = dec
         .decrypt_padded_vec_mut::<block_padding::Pkcs7>(&buf)
         .map_err(|e| format!("官方正文 PKCS#7 解密失败: {e}"))?;
@@ -349,7 +348,10 @@ fn json_first_string(value: &Value, keys: &[&str]) -> Option<String> {
 fn json_walk_item_id<'a>(value: &'a Value) -> Option<&'a Value> {
     match value {
         Value::Object(map) => {
-            if map.contains_key("item_id") || map.contains_key("itemId") || map.contains_key("content") {
+            if map.contains_key("item_id")
+                || map.contains_key("itemId")
+                || map.contains_key("content")
+            {
                 return Some(value);
             }
             for v in map.values() {
@@ -493,7 +495,9 @@ fn xor_reverse_prefix(data: &[u8], xor_len: usize) -> Vec<u8> {
 pub fn sign_argus(query: &str, body: Option<&str>, timestamp: u64, device_id: &str) -> String {
     let rand_val = rand::thread_rng().gen_range(0..0x7FFF_FFFFu32) as u64;
     let body_hash = match body {
-        Some(s) if !s.is_empty() => argus_hash6(hex::decode(s).ok().as_deref().or(Some(s.as_bytes()))),
+        Some(s) if !s.is_empty() => {
+            argus_hash6(hex::decode(s).ok().as_deref().or(Some(s.as_bytes())))
+        }
         _ => argus_hash6(None),
     };
     let fields = vec![
@@ -563,7 +567,11 @@ pub fn sign_argus(query: &str, body: Option<&str>, timestamp: u64, device_id: &s
 
 fn gorgon_nibble_swap(num: u8) -> u8 {
     let s = format!("{num:02x}");
-    u8::from_str_radix(&format!("{}{}", s.as_bytes()[1] as char, s.as_bytes()[0] as char), 16).unwrap_or(0)
+    u8::from_str_radix(
+        &format!("{}{}", s.as_bytes()[1] as char, s.as_bytes()[0] as char),
+        16,
+    )
+    .unwrap_or(0)
 }
 
 pub fn sign_gorgon(params: &str, body: &str, cookie: &str, timestamp: u64) -> String {
@@ -653,7 +661,9 @@ pub fn sign_gorgon(params: &str, body: &str, cookie: &str, timestamp: u64) -> St
 
 /// registerkey 请求体：随机 IV ‖ AES-CBC(device_id_le ‖ user_id_le)。逆向自 register_key_body@0x486618。
 pub fn build_register_content(device_id: &str) -> Result<String, String> {
-    let did: i64 = device_id.parse().map_err(|_| "官方 registerkey device_id 无效".to_string())?;
+    let did: i64 = device_id
+        .parse()
+        .map_err(|_| "官方 registerkey device_id 无效".to_string())?;
     let mut payload = Vec::with_capacity(16);
     payload.extend_from_slice(&did.to_le_bytes());
     payload.extend_from_slice(&0i64.to_le_bytes());
@@ -720,7 +730,10 @@ impl OfficialApi {
         let cache = load_device_cache();
         Self {
             http,
-            device_id: cache.as_ref().map(|c| c.device_id.clone()).unwrap_or_default(),
+            device_id: cache
+                .as_ref()
+                .map(|c| c.device_id.clone())
+                .unwrap_or_default(),
             iid: cache.as_ref().map(|c| c.iid.clone()).unwrap_or_default(),
             openudid: cache
                 .as_ref()
@@ -814,8 +827,10 @@ impl OfficialApi {
                 Ok(resp) => {
                     let text = resp.text().await.unwrap_or_default();
                     if let Ok(v) = serde_json::from_str::<Value>(&text) {
-                        let did = json_first_string(&v, &["device_id_str", "device_id"]).unwrap_or_default();
-                        let iid = json_first_string(&v, &["install_id_str", "install_id"]).unwrap_or_default();
+                        let did = json_first_string(&v, &["device_id_str", "device_id"])
+                            .unwrap_or_default();
+                        let iid = json_first_string(&v, &["install_id_str", "install_id"])
+                            .unwrap_or_default();
                         if !did.is_empty() && did != "0" {
                             self.device_id = did;
                             self.iid = iid;
@@ -945,7 +960,10 @@ impl OfficialApi {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
                     let text = resp.text().await.unwrap_or_default();
-                    return Ok((status, text));
+                    if (200..300).contains(&status) {
+                        return Ok((status, text));
+                    }
+                    last_err = format!("官方 API HTTP {status}: {}", preview_error(&text));
                 }
                 Err(e) => last_err = format!("请求番茄官方 API 失败: {e}"),
             }
@@ -962,7 +980,9 @@ impl OfficialApi {
             ("search_source", "1"),
             ("user_is_login", "0"),
         ];
-        let (_status, text) = self.signed_request("GET", PATH_SEARCH, &extra, None).await?;
+        let (_status, text) = self
+            .signed_request("GET", PATH_SEARCH, &extra, None)
+            .await?;
         parse_search_hits(&text)
     }
 
@@ -975,24 +995,42 @@ impl OfficialApi {
         parse_directory(&text, book_id)
     }
 
-    pub async fn chapter(&mut self, book_id: &str, item_id: &str) -> Result<OfficialChapter, String> {
+    pub async fn chapter(
+        &mut self,
+        book_id: &str,
+        item_id: &str,
+    ) -> Result<OfficialChapter, String> {
         self.ensure().await?;
         let extra_full = [("book_id", book_id), ("item_id", item_id)];
-        let (_status, text) = self
+        let mut full_error = None;
+        match self
             .signed_request("GET", PATH_READER_FULL, &extra_full, None)
-            .await?;
-        match parse_chapter(&text, item_id, self.content_key.as_deref()) {
-            Ok(ch) if !ch.content.is_empty() && ch.content != "Invalid" => return Ok(ch),
-            Ok(ch) if ch.content == "Invalid" => {
-                self.content_key = None;
-                self.register_key().await?;
-            }
-            Err(_) | Ok(_) => {}
+            .await
+        {
+            Ok((_status, text)) => match parse_chapter(&text, item_id, self.content_key.as_deref())
+            {
+                Ok(ch) if !ch.content.is_empty() && ch.content != "Invalid" => return Ok(ch),
+                Ok(ch) if ch.content == "Invalid" => {
+                    self.content_key = None;
+                    self.register_key().await?;
+                }
+                Ok(_) => {}
+                Err(err) => full_error = Some(err),
+            },
+            Err(err) => full_error = Some(err),
         }
+
         let extra_batch = [("book_id", book_id), ("item_ids", item_id)];
         let (_status, text) = self
             .signed_request("GET", PATH_BATCH_FULL, &extra_batch, None)
-            .await?;
+            .await
+            .map_err(|batch_error| {
+                format!(
+                    "full 请求失败：{}；batch_full 请求失败：{}",
+                    full_error.as_deref().unwrap_or("未返回完整正文"),
+                    batch_error
+                )
+            })?;
         let ch = parse_chapter(&text, item_id, self.content_key.as_deref())?;
         if ch.content == "Invalid" {
             self.content_key = None;
@@ -1039,23 +1077,33 @@ fn parse_search_hits(text: &str) -> Result<Vec<OfficialSearchHit>, String> {
         match cur {
             Value::Array(arr) => stack.extend(arr),
             Value::Object(map) => {
-                let book_id = map
-                    .get("book_id")
-                    .or(map.get("bookId"))
-                    .and_then(|x| x.as_str().map(|s| s.to_string()).or_else(|| x.as_u64().map(|n| n.to_string())));
+                let book_id = map.get("book_id").or(map.get("bookId")).and_then(|x| {
+                    x.as_str()
+                        .map(|s| s.to_string())
+                        .or_else(|| x.as_u64().map(|n| n.to_string()))
+                });
                 if let Some(book_id) = book_id {
                     if book_id.len() >= 10 {
                         hits.push(OfficialSearchHit {
                             book_id,
-                            title: json_first_string(&Value::Object(map.clone()), &["book_name", "bookName", "title"])
-                                .unwrap_or_else(|| "未命名".into()),
-                            author: json_first_string(&Value::Object(map.clone()), &["author", "authorName"])
-                                .unwrap_or_else(|| "未知作者".into()),
+                            title: json_first_string(
+                                &Value::Object(map.clone()),
+                                &["book_name", "bookName", "title"],
+                            )
+                            .unwrap_or_else(|| "未命名".into()),
+                            author: json_first_string(
+                                &Value::Object(map.clone()),
+                                &["author", "authorName"],
+                            )
+                            .unwrap_or_else(|| "未知作者".into()),
                             cover_url: json_first_string(
                                 &Value::Object(map.clone()),
                                 &["thumb_url", "thumbUrl", "cover_url", "cover"],
                             ),
-                            description: json_first_string(&Value::Object(map.clone()), &["abstract", "description"]),
+                            description: json_first_string(
+                                &Value::Object(map.clone()),
+                                &["abstract", "description"],
+                            ),
                         });
                     }
                 }
@@ -1101,18 +1149,33 @@ fn parse_directory(text: &str, book_id: &str) -> Result<OfficialBook, String> {
         book_id: book_id.to_string(),
         title: json_first_string(&book_info, &["book_name", "bookName", "title"])
             .unwrap_or_else(|| format!("番茄小说_{book_id}")),
-        author: json_first_string(&book_info, &["author", "authorName"]).unwrap_or_else(|| "网络作者".into()),
+        author: json_first_string(&book_info, &["author", "authorName"])
+            .unwrap_or_else(|| "网络作者".into()),
         cover_url: json_first_string(&book_info, &["thumb_url", "thumbUrl", "cover_url"]),
         description: json_first_string(&book_info, &["abstract", "description"]),
         chapters,
     })
 }
 
-fn parse_chapter(text: &str, item_id: &str, content_key: Option<&[u8]>) -> Result<OfficialChapter, String> {
+fn preview_error(text: &str) -> String {
+    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    compact.chars().take(240).collect()
+}
+
+fn parse_chapter(
+    text: &str,
+    item_id: &str,
+    content_key: Option<&[u8]>,
+) -> Result<OfficialChapter, String> {
     if text.trim().is_empty() {
         return Err("官方正文返回空响应".into());
     }
-    let v: Value = serde_json::from_str(text).map_err(|e| format!("官方正文响应不是 JSON: {e}; {}", &text[..text.len().min(180)]))?;
+    let v: Value = serde_json::from_str(text).map_err(|e| {
+        format!(
+            "官方正文响应不是 JSON: {e}; {}",
+            &text[..text.len().min(180)]
+        )
+    })?;
     let code = v.get("code").and_then(|c| c.as_i64()).unwrap_or(-1);
     if code != 0 && code != -1 {
         return Err(format!(
@@ -1127,7 +1190,8 @@ fn parse_chapter(text: &str, item_id: &str, content_key: Option<&[u8]>) -> Resul
         .or_else(|| json_walk_item_id(&data).cloned())
         .unwrap_or(data);
     let title = json_first_string(&item, &["title", "chapter_title"]).unwrap_or_default();
-    let raw = json_first_string(&item, &["content", "origin_content", "originContent"]).unwrap_or_default();
+    let raw = json_first_string(&item, &["content", "origin_content", "originContent"])
+        .unwrap_or_default();
     if raw.is_empty() {
         return Err("官方正文返回空响应".into());
     }
@@ -1148,7 +1212,10 @@ fn parse_chapter(text: &str, item_id: &str, content_key: Option<&[u8]>) -> Resul
         .and_then(|x| x.as_i64())
         .unwrap_or(0);
     let html = decode_official_body(&raw, content_key, crypt, compress)?;
-    Ok(OfficialChapter { title, content: html })
+    Ok(OfficialChapter {
+        title,
+        content: html,
+    })
 }
 
 fn decode_official_body(
@@ -1157,7 +1224,10 @@ fn decode_official_body(
     crypt_status: i64,
     compress_status: i64,
 ) -> Result<String, String> {
-    let looks_b64 = raw.len() > 24 && raw.bytes().all(|b| b.is_ascii() && !b.is_ascii_whitespace());
+    let looks_b64 = raw.len() > 24
+        && raw
+            .bytes()
+            .all(|b| b.is_ascii() && !b.is_ascii_whitespace());
     if let Some(key) = content_key {
         if looks_b64 && (crypt_status <= 0 || crypt_status == 1 || raw.len() % 4 == 0) {
             if let Ok(html) = decrypt_chapter_content(raw, key) {
@@ -1203,7 +1273,10 @@ mod tests {
         // 确定性：同 nonce 输出一致
         assert_eq!(sign_ladon_state(nonce), sign_ladon_state(nonce));
         // nonce 敏感性
-        assert_ne!(sign_ladon_state(nonce), sign_ladon_state([0x05, 0x06, 0x07, 0x08]));
+        assert_ne!(
+            sign_ladon_state(nonce),
+            sign_ladon_state([0x05, 0x06, 0x07, 0x08])
+        );
     }
 
     #[test]
