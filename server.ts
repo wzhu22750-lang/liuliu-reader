@@ -629,7 +629,7 @@ app.get('/api/tomato/chapter-content', async (req, res) => {
       itemId: cleanItemId,
       bookId: effectiveBookId,
       title: providerResult.chapter.title || webSnapshot?.title || '正文章节',
-      content: providerResult.chapter.content,
+      content: normalizeNovelContent(providerResult.chapter.content),
       expectedWordCount: webSnapshot?.expectedWordCount,
       isChapterLock: false,
       needPay: false,
