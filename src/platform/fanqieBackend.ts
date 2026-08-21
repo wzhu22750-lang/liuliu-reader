@@ -48,10 +48,9 @@ export interface FanqieNativeProgress {
  * change; the Liuli Reader UI stays independent of the IPC naming.
  */
 export const FANQIE_NATIVE_COMMANDS = {
-  // The APK evidence confirms AppState::dispatch_runtime, but does not yet
-  // prove the public Tauri command string. Keep this null until IPC capture or
-  // command-registration analysis confirms it.
-  dispatch: null,
+  // The APK's embedded Tauri command list contains `dispatch`; its Rust
+  // implementation routes into AppState::dispatch_runtime.
+  dispatch: 'dispatch',
   search: null,
   directory: null,
   chapter: null,
@@ -63,7 +62,7 @@ export const FANQIE_NATIVE_COMMANDS = {
 export async function invokeFanqieDispatch<T>(envelope: FanqieDispatchEnvelope): Promise<T> {
   const command = FANQIE_NATIVE_COMMANDS.dispatch;
   if (!command) {
-    throw new Error('番茄器 dispatch command 尚未完成验证，拒绝猜测 IPC 协议');
+    throw new Error('番茄器 dispatch command 不可用');
   }
   return invokeTauri<T>(command, envelope as unknown as Record<string, unknown>);
 }

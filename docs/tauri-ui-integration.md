@@ -45,3 +45,14 @@
 ### 仍未确认
 
 目前还不能从这些静态资料直接证明完整的动作字符串和每个动作的精确参数。因此 `FANQIE_NATIVE_COMMANDS` 暂时保持未映射是有意的。下一步应围绕 `dispatch_runtime` 做字符串交叉引用/反汇编，或者在授权 Android 测试环境中抓取原 UI 的 IPC 请求，得到真实 payload 后再接入 React。
+
+
+## Dispatch command 已确认
+
+继续分析 `.so` 的嵌入 Tauri command 列表后，确认其中包含 `dispatch`。因此 native bridge 的第一层 command 可以确定为：
+
+```text
+dispatch
+```
+
+它会进入 Rust 的 `AppState::dispatch_runtime`。目前还没有把具体业务 action 写死，因为 action 名称和每个 payload 的字段仍需要从前端 bundle 或运行时请求中逐项确认。
