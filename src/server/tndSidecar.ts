@@ -15,6 +15,10 @@ let child: ChildProcess | null = null;
 let startPromise: Promise<void> | null = null;
 let workQueue: Promise<unknown> = Promise.resolve();
 
+process.once('exit', () => {
+  if (child && child.exitCode == null) child.kill('SIGTERM');
+});
+
 function paths() {
   const root = path.resolve(process.env.TND_PROVIDER_ROOT || path.join(process.cwd(), '.local/tnd-provider'));
   return {
