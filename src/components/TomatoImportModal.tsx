@@ -8,12 +8,8 @@ import {
   FanqieSearchHit,
   TomatoFetchProgress,
 } from '../parsers/tomatoFetcher';
-<<<<<<< HEAD
 import { isTauri } from '../platform';
-import { Book } from '../types';
-=======
 import { Book, ReaderSettings } from '../types';
->>>>>>> codex/UI-design
 
 interface Props {
   onSuccess: (book: Book, openDirectly?: boolean) => void;

@@ -8,12 +8,8 @@ import { Book, ReaderSettings } from './types';
 import { Library } from './components/Library';
 import { Reader } from './components/Reader';
 import { ExcerptsView } from './components/ExcerptsView';
-<<<<<<< HEAD
-import { getBookById } from './db/store';
-=======
 import { SettingsModal } from './components/SettingsModal';
-import { getBookById, getReaderSettings, saveReaderSettings } from './db/indexedDB';
->>>>>>> codex/UI-design
+import { getBookById, getReaderSettings, saveReaderSettings } from './db/store';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'library' | 'reader' | 'excerpts' | 'settings'>('library');
