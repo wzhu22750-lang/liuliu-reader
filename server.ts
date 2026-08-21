@@ -373,68 +373,35 @@ app.get('/api/tomato/book-info', async (req, res) => {
       }).finally(() => clearTimeout(timeoutId));
 
       if (pageRes.ok) {
-        const html = await pageRes.text();
-        const stateIdx = html.indexOf('window.__INITIAL_STATE__=');
-        if (stateIdx !== -1) {
-          const raw = html.slice(stateIdx + 'window.__INITIAL_STATE__='.length);
-          let depth = 0;
-          let end = 0;
-          for (let i = 0; i < raw.length; i++) {
-            if (raw[i] === '{') depth++;
-            else if (raw[i] === '}') {
-              depth--;
-              if (depth === 0) {
-                end = i + 1;
-                break;
-              }
+        const state = extractInitialState(await pageRes.text());
+        const pageData = state.page || {};
+        const bookTitle = pageData.bookName || pageData.book_name || `番茄小说_${targetId}`;
+        const author = pageData.authorName || pageData.author || '网络作者';
+        const coverUrl = pageData.thumbUrl || pageData.thumbUri || '';
+        const description = pageData.abstract || pageData.description || '';
+        const chapters: { itemId: string; title: string; index: number }[] = [];
+        const volumes = pageData.chapterListWithVolume || [];
+
+        if (Array.isArray(volumes) && volumes.length > 0) {
+          for (const volume of volumes) {
+            if (!Array.isArray(volume)) continue;
+            for (const chapter of volume) {
+              const itemId = String(chapter.itemId || chapter.item_id || '');
+              if (!/^\d{10,25}$/.test(itemId)) continue;
+              chapters.push({ itemId, title: chapter.title || `第${chapters.length + 1}章`, index: chapters.length });
             }
           }
-          if (end > 0) {
-            const state = JSON.parse(raw.slice(0, end));
-            const pageData = state.page || {};
-            const bookTitle = pageData.bookName || pageData.book_name || `番茄小说_${targetId}`;
-            const author = pageData.authorName || pageData.author || '网络作者';
-            const coverUrl = pageData.thumbUrl || pageData.thumbUri || '';
-            const description = pageData.abstract || pageData.description || '';
-
-            const chapters: { itemId: string; title: string; index: number }[] = [];
-            const volumes = pageData.chapterListWithVolume || [];
-
-            if (Array.isArray(volumes) && volumes.length > 0) {
-              for (const vol of volumes) {
-                if (Array.isArray(vol)) {
-                  for (const ch of vol) {
-                    chapters.push({
-                      itemId: String(ch.itemId || ch.item_id),
-                      title: ch.title || `第${chapters.length + 1}章`,
-                      index: chapters.length,
-                    });
-                  }
-                }
-              }
-            } else if (Array.isArray(pageData.chapterList) && pageData.chapterList.length > 0) {
-              for (const ch of pageData.chapterList) {
-                chapters.push({
-                  itemId: String(ch.itemId || ch.item_id),
-                  title: ch.title || `第${chapters.length + 1}章`,
-                  index: chapters.length,
-                });
-              }
-            }
-
-            if (chapters.length > 0) {
-              res.json({
-                bookId: targetId,
-                title: bookTitle,
-                author,
-                coverUrl,
-                description,
-                totalChapters: chapters.length,
-                chapters,
-              });
-              return;
-            }
+        } else if (Array.isArray(pageData.chapterList)) {
+          for (const chapter of pageData.chapterList) {
+            const itemId = String(chapter.itemId || chapter.item_id || '');
+            if (!/^\d{10,25}$/.test(itemId)) continue;
+            chapters.push({ itemId, title: chapter.title || `第${chapters.length + 1}章`, index: chapters.length });
           }
+        }
+
+        if (chapters.length > 0) {
+          res.json({ bookId: targetId, title: bookTitle, author, coverUrl, description, totalChapters: chapters.length, chapters });
+          return;
         }
       }
     } catch (e: any) {
