@@ -17,10 +17,14 @@ export interface BookProgress {
   lastReadTime: number;
 }
 
+export type BookImportStatus = 'IMPORTING' | 'READY' | 'FAILED';
+
 export interface FetchStatus {
   total: number;
   completed: number;
   isFetching: boolean;
+  status?: BookImportStatus;
+  error?: string;
 }
 
 export interface Book {
@@ -33,6 +37,7 @@ export interface Book {
   sourceType: SourceType;
   sourceUrl?: string;
   totalChapters: number;
+  totalWords?: number; // total word count across all chapters
   chapters: Chapter[];
   progress: BookProgress;
   createdAt: number;

@@ -1,5 +1,6 @@
 import { Book, Chapter } from '../types';
 import { saveBook, getBookById } from '../db/indexedDB';
+import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
 
 export interface TomatoChapterMeta {
   itemId: string;
@@ -15,6 +16,20 @@ export interface TomatoBookInfo {
   description?: string;
   totalChapters: number;
   chapters: TomatoChapterMeta[];
+}
+
+export interface TomatoChapterContent {
+  title: string;
+  content: string;
+  wordCount?: number;
+  fontUrl?: string;
+  decodeStatus?: TomatoDecodeStatus;
+  decodeMappingId?: string;
+  decodeUnknownCount?: number;
+  expectedWordCount?: number;
+  complete?: boolean;
+  isPreview?: boolean;
+  provider?: string;
 }
 
 export interface TomatoFetchProgress {
@@ -162,14 +177,53 @@ export async function fetchTomatoBookInfo(bookIdOrUrl: string): Promise<TomatoBo
  * 4. 获取单章纯文本正文与字体配置
  */
 export async function fetchTomatoChapterContent(
-  itemId: string
-): Promise<{ title: string; content: string; wordCount?: number; fontUrl?: string }> {
-  const res = await fetch(`/api/tomato/chapter-content?itemId=${encodeURIComponent(itemId)}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || '获取章节正文失败');
+  bookId: string,
+  itemId: string,
+  chapterIndex: number,
+  options: { maxAttempts?: number } = {}
+): Promise<TomatoChapterContent> {
+  const maxAttempts = options.maxAttempts ?? 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`/api/tomato/chapter-content?bookId=${encodeURIComponent(bookId)}&itemId=${encodeURIComponent(itemId)}&chapterIndex=${chapterIndex}`);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || '获取章节正文失败');
+
+      const content = String(payload.content || '').trim();
+      if (!content) throw new Error(`章节“${payload.title || itemId}”返回空正文`);
+      if (payload.complete === false || payload.hasMore === true || payload.nextCursor) {
+        throw new Error(`章节“${payload.title || itemId}”正文仍有未读取分页`);
+      }
+      if (payload.isPreview === true || payload.preview === true) {
+        throw new Error(`章节“${payload.title || itemId}”仅返回预览正文`);
+      }
+
+      const decoded = decodeTomatoText(content);
+      if (decoded.status === 'partial' || decoded.status === 'unsupported') {
+        throw new Error(
+          `章节“${payload.title || itemId}”包含 ${decoded.unknownCount} 个未解码字符，已停止导入，避免保存乱码。`
+        );
+      }
+      assertTomatoTextExportable(decoded.content);
+      return {
+        ...payload,
+        content: decoded.content,
+        wordCount: decoded.content.length,
+        decodeStatus: decoded.status,
+        decodeMappingId: decoded.mappingId,
+        decodeUnknownCount: decoded.unknownCount,
+      };
+    } catch (error: any) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** (attempt - 1)));
+      }
+    }
   }
-  return res.json();
+
+  throw lastError || new Error(`章节“${itemId}”获取失败`);
 }
 
 const CHAPTER_FETCH_RETRIES = 3;
@@ -216,7 +270,14 @@ export function downloadNovelAsTxt(
 
   for (let i = 0; i < chapters.length; i++) {
     const ch = chapters[i];
-    fileContent += `${ch.title}\n\n${ch.content}\n\n${'-'.repeat(24)}\n\n`;
+    const decoded = decodeTomatoText(ch.content);
+    if (decoded.status === 'partial' || decoded.status === 'unsupported') {
+      throw new Error(
+        `第 ${i + 1} 章仍包含 ${decoded.unknownCount} 个未解码字符，已阻止导出乱码文件。`
+      );
+    }
+    assertTomatoTextExportable(decoded.content);
+    fileContent += `${ch.title}\n\n${decoded.content}\n\n${'-'.repeat(24)}\n\n`;
   }
 
   const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
@@ -238,118 +299,101 @@ export async function startTomatoNovelImport(
   onProgress?: (progress: TomatoFetchProgress) => void
 ): Promise<Book> {
   const parsed = extractUrlAndTitle(urlOrInput);
+  const emit = (progress: TomatoFetchProgress) => onProgress?.(progress);
 
-  if (onProgress) {
-    onProgress({
-      bookId: '',
-      totalChapters: 0,
-      completedChapters: 0,
-      currentChapterTitle: '正在解析分享链接与书籍信息...',
-      statusText: '正在解析分享链接与重定向目标...',
-      isComplete: false,
-    });
-  }
+  emit({
+    bookId: '', totalChapters: 0, completedChapters: 0,
+    currentChapterTitle: '正在解析分享链接与书籍信息...',
+    statusText: '正在解析分享链接与重定向目标...', isComplete: false,
+  });
 
-  // 1. 深度解析得到准确的 Book ID
   const resolvedBookId = await resolveNovelShareUrl(urlOrInput);
+  emit({
+    bookId: resolvedBookId, totalChapters: 0, completedChapters: 0,
+    currentChapterTitle: '正在拉取小说全本目录...',
+    statusText: '正在获取书籍目录与最新章节...', isComplete: false,
+  });
 
-  if (onProgress) {
-    onProgress({
-      bookId: resolvedBookId,
-      totalChapters: 0,
-      completedChapters: 0,
-      currentChapterTitle: '正在拉取小说全本目录...',
-      statusText: '正在获取书籍目录与最新章节...',
-      isComplete: false,
-    });
-  }
-
-  // 2. 获取全书元数据与目录
   const bookInfo = await fetchTomatoBookInfo(resolvedBookId);
-
-  // 如果用户输入带有《书名》，但服务端返回了默认名，优先使用用户书名
-  const finalTitle =
-    bookInfo.title && !bookInfo.title.startsWith('番茄小说_')
-      ? bookInfo.title
-      : parsed.titleHint || bookInfo.title || '精选网络小说';
+  const finalTitle = bookInfo.title && !bookInfo.title.startsWith('番茄小说_')
+    ? bookInfo.title : parsed.titleHint || bookInfo.title || '精选网络小说';
+  if (!bookInfo.chapters.length) throw new Error('未获取到有效章节目录，已取消导入');
 
   const now = Date.now();
   const internalBookId = `book_tomato_${now}_${Math.random().toString(36).slice(2, 7)}`;
+  const chapters: Chapter[] = [];
+  let detectedFontUrl: string | undefined;
+  const totalChapters = bookInfo.chapters.length;
 
-  // 3. 先拉取前 1~2 章，保证秒开阅读
-  const initialChaptersMeta = bookInfo.chapters.slice(0, 1);
-  const initialChapters: Chapter[] = [];
-  let detectedFontUrl: string | undefined = undefined;
+  emit({
+    bookId: internalBookId, totalChapters, completedChapters: 0,
+    currentChapterTitle: '准备获取正文...', statusText: `已获取章节目录，共 ${totalChapters} 章`,
+    isComplete: false, chaptersData: [],
+  });
 
+<<<<<<< HEAD
   for (let i = 0; i < initialChaptersMeta.length; i++) {
     const meta = initialChaptersMeta[i];
     const chData = await fetchChapterWithRetry(meta);
     if (chData.fontUrl) {
       detectedFontUrl = chData.fontUrl;
+=======
+  // Sequential requests protect the source and make chapter-level failure diagnostics deterministic.
+  for (let i = 0; i < bookInfo.chapters.length; i++) {
+    const meta = bookInfo.chapters[i];
+    try {
+      const chData = await fetchTomatoChapterContent(resolvedBookId, meta.itemId, meta.index);
+      if (chData.fontUrl) detectedFontUrl = detectedFontUrl || chData.fontUrl;
+      const chapter: Chapter = {
+        id: `${internalBookId}_ch_${i}`, index: i,
+        title: chData.title || meta.title, content: chData.content,
+        wordCount: chData.content.length, fontUrl: chData.fontUrl,
+      };
+      if (!chapter.content.trim()) throw new Error('正文为空');
+      chapters.push(chapter);
+      emit({
+        bookId: internalBookId, totalChapters, completedChapters: chapters.length,
+        currentChapterTitle: chapter.title,
+        statusText: `正在获取正文：${chapters.length} / ${totalChapters} 章`,
+        isComplete: false,
+        chaptersData: chapters.map((c) => ({ title: c.title, content: c.content })),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    } catch (error: any) {
+      const message = `第 ${i + 1} 章《${meta.title}》获取失败：${error.message}`;
+      emit({
+        bookId: internalBookId, totalChapters, completedChapters: chapters.length,
+        currentChapterTitle: meta.title, statusText: '导入失败，未写入书架',
+        isComplete: false, error: message,
+        chaptersData: chapters.map((c) => ({ title: c.title, content: c.content })),
+      });
+      throw new Error(message);
+>>>>>>> codex/0821error
     }
-
-    initialChapters.push({
-      id: `${internalBookId}_ch_${i}`,
-      index: i,
-      title: chData.title || meta.title,
-      content: chData.content,
-      wordCount: chData.wordCount || chData.content.length,
-      fontUrl: chData.fontUrl,
-    });
   }
-
-  const totalChapters = bookInfo.totalChapters || bookInfo.chapters.length;
 
   const newBook: Book = {
-    id: internalBookId,
-    title: finalTitle,
-    author: bookInfo.author || '网络作者',
-    coverUrl: bookInfo.coverUrl,
-    fontUrl: detectedFontUrl,
-    coverColor: 'from-[#fdfcfa] to-[#f5f1e8]',
-    sourceType: 'tomato',
-    sourceUrl: urlOrInput,
-    totalChapters: totalChapters,
-    chapters: initialChapters,
-    progress: {
-      chapterIndex: 0,
-      chapterTitle: initialChapters[0]?.title || '第一章',
-      percentage: 0,
-      scrollOffset: 0,
-      lastReadTime: now,
-    },
-    fetchStatus: {
-      total: totalChapters,
-      completed: initialChapters.length,
-      isFetching: initialChapters.length < totalChapters,
-    },
-    createdAt: now,
-    updatedAt: now,
-    isArchived: false,
+    id: internalBookId, title: finalTitle, author: bookInfo.author || '网络作者',
+    coverUrl: bookInfo.coverUrl, fontUrl: detectedFontUrl,
+    coverColor: 'from-[#fdfcfa] to-[#f5f1e8]', sourceType: 'tomato', sourceUrl: urlOrInput,
+    totalChapters, totalWords: chapters.reduce((sum, c) => sum + c.wordCount, 0), chapters,
+    progress: { chapterIndex: 0, chapterTitle: chapters[0]?.title || '第一章', percentage: 0, scrollOffset: 0, lastReadTime: now },
+    fetchStatus: { total: totalChapters, completed: totalChapters, isFetching: false, status: 'READY' },
+    createdAt: now, updatedAt: now, isArchived: false,
   };
 
+  // Atomic bookshelf commit: no Book is persisted before every chapter passes validation and decoding.
   await saveBook(newBook);
-
-  if (onProgress) {
-    onProgress({
-      bookId: internalBookId,
-      totalChapters,
-      completedChapters: initialChapters.length,
-      currentChapterTitle: initialChapters[0]?.title || '第一章',
-      statusText: '第一章已就绪，可立即开始阅读',
-      isComplete: initialChapters.length >= totalChapters,
-      chaptersData: initialChapters.map((c) => ({ title: c.title, content: c.content })),
-    });
-  }
-
-  // 4. 启动后台异步流水线拉取后续章节并持久化
-  if (initialChapters.length < totalChapters) {
-    runBackgroundChapterPipeline(internalBookId, bookInfo.chapters, initialChapters, onProgress);
-  }
-
+  emit({
+    bookId: internalBookId, totalChapters, completedChapters: totalChapters,
+    currentChapterTitle: chapters[chapters.length - 1]?.title || '',
+    statusText: `《${finalTitle}》导入完成，已自动加入书架`, isComplete: true,
+    chaptersData: chapters.map((c) => ({ title: c.title, content: c.content })),
+  });
   return newBook;
 }
 
+<<<<<<< HEAD
 /**
  * 异步后台流水线拉取并写入 IndexedDB
  */
@@ -460,3 +504,5 @@ async function runBackgroundChapterPipeline(
   });
 }
 
+=======
+>>>>>>> codex/0821error

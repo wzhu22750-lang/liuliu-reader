@@ -56,9 +56,21 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
   const [activeMenuBookId, setActiveMenuBookId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const closeBookMenu = () => {
+    setActiveMenuBookId(null);
+  };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleOpenBookSafely = (book: Book) => {
+    if (book.sourceType === 'tomato' && book.fetchStatus?.status !== 'READY') {
+      showToast(book.fetchStatus?.error || '这本网络小说尚未完整导入，暂时不能阅读');
+      return;
+    }
+    onOpenBook(book);
   };
 
   const loadBooks = async () => {
@@ -152,7 +164,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
       0,
       0
     );
-    setActiveMenuBookId(null);
+    closeBookMenu();
     await loadBooks();
     showToast(`《${book.title}》已重置阅读进度`);
   };
@@ -165,7 +177,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
       )
     ) {
       await deleteBook(book.id);
-      setActiveMenuBookId(null);
+      closeBookMenu();
       await loadBooks();
       showToast(`《${book.title}》已从书库彻底删除（摘抄已永久保留）`);
     }
@@ -332,7 +344,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                       <Sparkles className="w-4 h-4 text-[#da7756]" />
                       <div>
                         <div className="font-semibold">番茄 / 网络小说链接</div>
-                        <div className="text-[10px] text-stone-500">支持流式边下边读</div>
+                        <div className="text-[10px] text-stone-500">后台完整导入后阅读</div>
                       </div>
                     </button>
                   </div>
@@ -428,7 +440,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               return (
                 <div
                   key={book.id}
-                  onClick={() => onOpenBook(book)}
+                  onClick={() => handleOpenBookSafely(book)}
                   className="group relative flex flex-col cursor-pointer select-none"
                 >
                   {/* Book Typographic Milk-White Minimalist Cover */}
@@ -446,40 +458,17 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActiveMenuBookId(
-                            activeMenuBookId === book.id ? null : book.id
-                          );
+                          if (activeMenuBookId === book.id) {
+                            closeBookMenu();
+                            return;
+                          }
+                          setActiveMenuBookId(book.id);
                         }}
                         className="p-1 rounded-lg text-stone-400 hover:text-[#141413] hover:bg-stone-200/50 transition"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
                       </button>
                     </div>
-
-                    {/* Action Popup */}
-                    {activeMenuBookId === book.id && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className="absolute top-10 right-2 z-30 w-44 bg-white rounded-xl shadow-2xl border border-[#e8e6df] py-1 text-xs text-[#141413] animate-in fade-in zoom-in-95 font-sans"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleResetProgress(book)}
-                          className="w-full text-left px-3 py-2 hover:bg-[#f5f4ee] flex items-center gap-2"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
-                          <span>从头开始阅读</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteBook(book)}
-                          className="w-full text-left px-3 py-2 hover:bg-[#f5f4ee] text-[#ff5f38] flex items-center gap-2 font-medium"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>彻底删除书籍</span>
-                        </button>
-                      </div>
-                    )}
 
                     {/* Center Title & Author Card Frame */}
                     <div className={`my-auto py-3 px-2 text-center rounded-xl border ${coverTheme.innerBorder} bg-white/40 backdrop-blur-[1px] space-y-1.5`}>
@@ -507,13 +496,50 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                     </div>
                   </div>
 
+                  {/* The menu stays inside the cover and scales with the card width. */}
+                  {activeMenuBookId === book.id && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeBookMenu();
+                        }}
+                      />
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute top-10 right-2 z-50 w-[calc(100%-1rem)] max-w-44 bg-white rounded-xl shadow-2xl border border-[#e8e6df] py-1 text-[clamp(9px,2.5vw,12px)] text-[#141413] animate-in fade-in zoom-in-95 font-sans"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleResetProgress(book)}
+                          className="w-full text-left px-2.5 py-2 hover:bg-[#f5f4ee] flex items-center gap-1.5 whitespace-normal leading-tight"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5 text-stone-500 shrink-0" />
+                          <span>从头开始阅读</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBook(book)}
+                          className="w-full text-left px-2.5 py-2 hover:bg-[#f5f4ee] text-[#ff5f38] flex items-center gap-1.5 font-medium whitespace-normal leading-tight"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>彻底删除书籍</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
+
                   {/* Title text under cover for clarity */}
                   <div className="mt-2 space-y-0.5 font-sans">
                     <div className="text-xs font-semibold text-[#141413] truncate font-serif">
                       {book.title}
                     </div>
                     <div className="text-[11px] text-stone-500 truncate font-mono">
-                      {book.chapters.length} 章节 · {Math.round(book.totalWords / 10000 * 10) / 10} 万字
+                      {book.chapters.length} 章节 ·{' '}
+                      {book.totalWords != null
+                        ? `${Math.round(book.totalWords / 10000 * 10) / 10} 万字`
+                        : '字数统计中'}
                     </div>
                   </div>
                 </div>
@@ -531,7 +557,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               return (
                 <div
                   key={book.id}
-                  onClick={() => onOpenBook(book)}
+                  onClick={() => handleOpenBookSafely(book)}
                   className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#e8e6df] shadow-xs hover:shadow-md transition flex items-center justify-between gap-4 cursor-pointer"
                 >
                   <div className="flex items-center gap-3.5 truncate">

@@ -8,6 +8,7 @@ export const DEMO_BOOKS: Book[] = [
     coverColor: 'from-stone-700 to-amber-950',
     sourceType: 'demo',
     totalChapters: 4,
+    totalWords: 1510,
     createdAt: Date.now() - 86400000 * 3,
     updatedAt: Date.now() - 86400000 * 3,
     progress: {
@@ -55,6 +56,7 @@ export const DEMO_BOOKS: Book[] = [
     coverColor: 'from-slate-900 to-indigo-950',
     sourceType: 'demo',
     totalChapters: 3,
+    totalWords: 950,
     createdAt: Date.now() - 86400000 * 2,
     updatedAt: Date.now() - 86400000 * 2,
     progress: {
@@ -95,6 +97,7 @@ export const DEMO_BOOKS: Book[] = [
     coverColor: 'from-amber-700 to-red-950',
     sourceType: 'demo',
     totalChapters: 3,
+    totalWords: 960,
     createdAt: Date.now() - 86400000 * 1,
     updatedAt: Date.now() - 86400000 * 1,
     progress: {

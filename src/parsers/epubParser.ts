@@ -232,6 +232,7 @@ export function createBookFromEpub(parseResult: EpubParseResult): Book {
     coverColor,
     sourceType: 'epub',
     totalChapters: parseResult.chapters.length,
+    totalWords: parseResult.totalWords,
     chapters: parseResult.chapters,
     progress: {
       chapterIndex: 0,

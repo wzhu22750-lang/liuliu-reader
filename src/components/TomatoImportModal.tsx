@@ -45,11 +45,12 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
   };
 
   const handleOpenReaderNow = () => {
-    if (importedBook) {
+    if (importedBook && progress?.isComplete) {
       onSuccess(importedBook, true);
     }
   };
 
+<<<<<<< HEAD
   const handleExportTxt = async () => {
     if (!importedBook) return;
 
@@ -71,6 +72,35 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
       .sort((a, b) => a.index - b.index)
       .map((chapter) => ({ title: chapter.title, content: chapter.content }));
     downloadNovelAsTxt(latestBook.title, latestBook.author, chaptersToExport);
+=======
+  const handleRetryImport = async () => {
+    if (!inputUrl.trim() || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const book = await startTomatoNovelImport(inputUrl.trim(), (p) => setProgress(p));
+      setImportedBook(book);
+    } catch (err: any) {
+      setError(err.message || '重试导入失败，请稍后再试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportTxt = () => {
+    if (!importedBook) return;
+    setError(null);
+    const chaptersToExport =
+      progress?.chaptersData && progress.chaptersData.length > 0
+        ? progress.chaptersData
+        : importedBook.chapters.map((c) => ({ title: c.title, content: c.content }));
+
+    try {
+      downloadNovelAsTxt(importedBook.title, importedBook.author, chaptersToExport);
+    } catch (err: any) {
+      setError(err.message || '正文仍包含未解码字符，已阻止导出乱码文件');
+    }
+>>>>>>> codex/0821error
   };
 
   return (
@@ -221,15 +251,26 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose }) => {
                 当前进度：{progress.currentChapterTitle}
               </div>
 
-              {/* Actions: Instant Read & Download TXT */}
+              {/* Actions: only a fully READY book can be read or exported */}
+              {progress.error && (
+                <button
+                  type="button"
+                  onClick={handleRetryImport}
+                  disabled={loading}
+                  className="w-full px-4 py-2 text-xs font-medium bg-white dark:bg-stone-800 hover:bg-[#e8e6df]/50 text-[#da7756] border border-[#e8e6df] dark:border-stone-700 rounded-xl transition disabled:opacity-50"
+                >
+                  {loading ? '正在重试...' : '重试导入'}
+                </button>
+              )}
               <div className="pt-2 flex flex-col sm:flex-row gap-2">
                 <button
                   type="button"
                   onClick={handleOpenReaderNow}
+                  disabled={!importedBook || !progress.isComplete}
                   className="flex-1 px-4 py-2.5 text-xs font-medium bg-[#da7756] hover:bg-[#c86341] text-white rounded-xl shadow-xs transition flex items-center justify-center gap-1.5"
                 >
                   <ArrowRight className="w-4 h-4" />
-                  立即进入阅读（已就绪 {progress.completedChapters} 章）
+                  {progress.isComplete ? '进入阅读（全本已就绪）' : '全部章节完成后可阅读'}
                 </button>
 
                 <button

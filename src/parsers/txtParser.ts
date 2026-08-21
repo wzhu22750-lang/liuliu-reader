@@ -196,6 +196,7 @@ export function createBookFromTxt(
     coverColor,
     sourceType: 'txt',
     totalChapters: parseResult.chapters.length,
+    totalWords: parseResult.totalWords,
     chapters: parseResult.chapters,
     progress: {
       chapterIndex: 0,
