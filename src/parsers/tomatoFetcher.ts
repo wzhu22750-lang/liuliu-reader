@@ -1,6 +1,8 @@
 import { Book, Chapter } from '../types';
 import { saveBook, getBookById } from '../db/indexedDB';
 import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
+import { fetchNativeBookInfo, fetchNativeChapterContent, importNativeFanqieBook, isFanqieNativeBackendAvailable, resolveNativeBookId } from '../platform/fanqieReaderAdapter';
+import { isTauriRuntime } from '../platform/tauriRuntime';
 
 export interface TomatoChapterMeta {
   itemId: string;
@@ -164,6 +166,10 @@ export async function resolveNovelShareUrl(rawUrlOrText: string): Promise<string
  * 3. 获取书籍信息与全本目录
  */
 export async function fetchTomatoBookInfo(bookIdOrUrl: string): Promise<TomatoBookInfo> {
+  if (isTauriRuntime() && isFanqieNativeBackendAvailable()) {
+    const info = await fetchNativeBookInfo(bookIdOrUrl);
+    return { bookId: info.bookId, title: info.title, author: info.author, coverUrl: info.coverUrl, description: info.description, totalChapters: info.chapters.length, chapters: info.chapters.map((chapter, index) => ({ itemId: String(chapter.item_id || chapter.chapter_id || index), title: chapter.title || `第${index + 1}章`, index: chapter.index ?? index })) };
+  }
   const res = await fetch(`/api/tomato/book-info?bookId=${encodeURIComponent(bookIdOrUrl)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -181,6 +187,11 @@ export async function fetchTomatoChapterContent(
   chapterIndex: number,
   options: { maxAttempts?: number } = {}
 ): Promise<TomatoChapterContent> {
+  if (isTauriRuntime() && isFanqieNativeBackendAvailable()) {
+    const native = await fetchNativeChapterContent(bookId, { item_id: itemId, title: `第${chapterIndex + 1}章`, index: chapterIndex });
+    return { title: native.title, content: native.content, wordCount: native.wordCount, complete: true, provider: 'fanqie-native' };
+  }
+
   const maxAttempts = options.maxAttempts ?? 3;
   let lastError: Error | null = null;
 
@@ -273,6 +284,15 @@ export async function startTomatoNovelImport(
     currentChapterTitle: '正在解析分享链接与书籍信息...',
     statusText: '正在解析分享链接与重定向目标...', isComplete: false,
   });
+
+  if (isTauriRuntime() && isFanqieNativeBackendAvailable()) {
+    const nativeBook = await importNativeFanqieBook(urlOrInput, parsed.titleHint, (completed, total, title) => {
+      emit({ bookId: urlOrInput, totalChapters: total, completedChapters: completed, currentChapterTitle: title, statusText: `正在获取正文：${completed} / ${total} 章`, isComplete: false });
+    });
+    await saveBook(nativeBook);
+    emit({ bookId: nativeBook.id, totalChapters: nativeBook.totalChapters, completedChapters: nativeBook.totalChapters, currentChapterTitle: nativeBook.chapters.at(-1)?.title || '', statusText: `《${nativeBook.title}》导入完成，已自动加入书架`, isComplete: true, chaptersData: nativeBook.chapters.map((c) => ({ title: c.title, content: c.content })) });
+    return nativeBook;
+  }
 
   const resolvedBookId = await resolveNovelShareUrl(urlOrInput);
   emit({
