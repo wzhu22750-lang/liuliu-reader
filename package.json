@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "provider:install": "node scripts/install-tnd-provider.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
