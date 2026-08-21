@@ -1,7 +1,8 @@
 import { Book, Chapter } from '../types';
 import { saveBook, getBookById } from '../db/indexedDB';
 import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
-import { fetchNativeBookInfo, fetchNativeChapterContent, importNativeFanqieBook, isFanqieNativeBackendAvailable, resolveNativeBookId } from '../platform/fanqieReaderAdapter';
+import { fetchNativeBookInfo, fetchNativeChapterContent, importNativeFanqieBook } from '../platform/fanqieReaderAdapter';
+import { isFanqieNativeBackendAvailable } from '../platform/fanqieBackend';
 import { isTauriRuntime } from '../platform/tauriRuntime';
 
 export interface TomatoChapterMeta {
