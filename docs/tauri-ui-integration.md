@@ -22,11 +22,22 @@
 4. 集中管理未来恢复出的 Tauri command 映射。
 5. 拒绝在 IPC 未验证前猜测 command 名称，避免出现“界面能开但下载链路损坏”的假集成。
 
-## 下一步阻塞点
+## 当前集成状态
 
-需要从原始 `.so` 的 Tauri invoke 注册路径恢复实际 command 清单、参数和返回值。当前证据只确认了 Rust backend 的模型字段和内部方法，尚不足以安全填写 `FANQIE_NATIVE_COMMANDS`。
+`src/platform/fanqieReaderAdapter.ts` 已经接入 native-first 导入链路：
 
-恢复命令后，适配范围应限制在 `src/platform/fanqieBackend.ts`，再由导入弹窗、下载状态和导出流程调用适配层。
+- Tauri Android 环境：通过 `dispatch` 调用 `search`、`book_detail`、`chapter_content`。
+- 浏览器环境：继续使用现有 `/api/tomato/*` 开发路径。
+- 返回值统一转换为溜溜读书的 `Book`、`Chapter` 模型。
+- 只有所有章节正文成功返回后才写入 IndexedDB，保留原有的原子导入行为。
+
+当前仍未完成的是 Android APK 构建：本仓库目前只有 React/Vite 工程，没有 `src-tauri`、Cargo 工程或 Android Gradle 工程。因此现在可以验证前端编译和 adapter 单测，但不能在这个仓库直接产出最终 APK。最终 APK 需要把本分支的前端资源接入原番茄器 Tauri 工程后再构建。
+
+## 验证结果
+
+- `npm run lint` 通过。
+- `npm test` 通过，8 个测试全部通过。
+- `npm run build` 通过。
 
 ## `番茄器/fanqie-apk` 新证据
 
