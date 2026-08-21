@@ -1,0 +1,20 @@
+- generic [ref=f3e4]:
+  - banner [ref=f3e5]:
+    - generic [ref=f3e6]:
+      - paragraph [ref=f3e7]: LIULIU READER
+      - heading "书架" [level=1] [ref=f3e8]
+      - paragraph [ref=f3e9]: 共 0 本书 · 安静阅读，随时继续
+    - generic [ref=f3e10]:
+      - button "导入书籍" [ref=f3e11]
+      - button "我的与设置" [ref=f3e15]
+  - main [ref=f3e17]:
+    - textbox "搜索书名或作者" [ref=f3e22]
+    - generic [ref=f3e23]:
+      - generic [ref=f3e24]:
+        - generic [ref=f3e25]: 正在阅读
+        - generic [ref=f3e26]: 0 本
+      - generic [ref=f3e27]: 正在整理书架…
+  - navigation "主导航" [ref=f3e28]:
+    - button "首页" [ref=f3e29]
+    - button "书架" [ref=f3e34]
+    - button "我的" [ref=f3e38]
