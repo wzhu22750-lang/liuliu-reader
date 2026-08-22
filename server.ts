@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { decodeTomatoText } from './src/parsers/tomatoObfuscation';
-import { fetchTndSidecarChapter } from './src/server/tndSidecar';
 import {
   assessChapterCompleteness,
   buildProviderUrl,
@@ -543,11 +542,6 @@ async function fetchConfiguredChapterProvider(bookId: string | undefined, itemId
 
   for (const endpoint of endpoints) {
     try {
-      if (endpoint === 'tnd-sidecar://local') {
-        if (!bookId || chapterIndex == null) throw new Error('TND sidecar 需要 bookId 和 chapterIndex');
-        const chapter = await fetchTndSidecarChapter(bookId, itemId, chapterIndex);
-        return { chapter, errors };
-      }
       const url = buildProviderUrl(endpoint, bookId, itemId, chapterIndex);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);

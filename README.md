@@ -29,24 +29,8 @@
 
 **溜溜读书 —— 让阅读不止于阅读。**
 
-## 本地完整正文 Provider
+## Android 原生小说下载
 
-网页 Reader 在部分书籍的前若干目录项之后只返回预览。项目支持使用本地 `Tomato-Novel-Downloader` sidecar 获取完整正文，sidecar 只监听本机地址，下载缓存保存在未纳入 Git 的 `.local/tnd-provider` 目录。
+Android APK 通过内置 Tauri/Rust native backend 完成分享链接解析、书籍目录获取、章节正文处理、章节缓存、暂停/继续/重试和本地导入。下载任务与可阅读书籍分离：只有全部章节通过完整性校验后，书籍才会一次性写入书架。
 
-首次安装：
-
-```bash
-npm run provider:install
-```
-
-本地 `.env` 配置：
-
-```env
-FANQIE_CONTENT_API_ENDPOINTS="tnd-sidecar://local"
-TND_PROVIDER_PORT="18429"
-TND_PROVIDER_ROOT=".local/tnd-provider"
-```
-
-启动应用后不需要单独启动 Provider。遇到网页锁定预览时，服务端会自动启动 sidecar、按章节位置获取正文、从 chapter_id 缓存读取 XHTML，然后继续执行完整性检查和字体解码。
-
-Provider Release、版本和校验信息记录在 `THIRD_PARTY_NOTICES.md`。请仅处理你有权保存和阅读的内容，并遵守内容平台的服务条款。
+浏览器开发模式仍保留网页 Reader Provider，用于公开网页正文的兼容回退；它不会覆盖 Android 原生 Provider 已缓存并校验成功的章节。若受保护接口需要额外授权，应通过自有后端代理，不得把 token、设备密钥或服务端凭据写入前端资源或 APK。
