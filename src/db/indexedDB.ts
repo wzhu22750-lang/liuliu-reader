@@ -11,7 +11,7 @@ import {
 import { DEMO_BOOKS } from '../parsers/demoBooks';
 
 const DB_NAME = 'ReaderAIDatabase';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   fontSize: 18,
@@ -29,7 +29,7 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
   modelName: 'gemini-3.7-flash',
 };
 
-function openDB(): Promise<IDBDatabase> {
+export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -66,6 +66,18 @@ function openDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains('app_settings')) {
         db.createObjectStore('app_settings', { keyPath: 'key' });
+      }
+
+      if (!db.objectStoreNames.contains('download_jobs')) {
+        const jobStore = db.createObjectStore('download_jobs', { keyPath: 'id' });
+        jobStore.createIndex('sourceBookId', 'sourceBookId', { unique: true });
+        jobStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains('chapter_cache')) {
+        const cacheStore = db.createObjectStore('chapter_cache', { keyPath: 'id' });
+        cacheStore.createIndex('bookId', 'bookId', { unique: false });
+        cacheStore.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
     };
 
@@ -545,5 +557,47 @@ export async function restoreBackup(backup: BackupData): Promise<{ success: bool
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve({ success: true, message: '备份已成功恢复！' });
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+
+// ---------------- NATIVE DOWNLOAD OPERATIONS ----------------
+export async function saveDownloadJob(job: { id: string }): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('download_jobs', 'readwrite');
+    tx.objectStore('download_jobs').put(job);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getDownloadJobByBookId(bookId: string): Promise<unknown | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('download_jobs', 'readonly');
+    const request = tx.objectStore('download_jobs').index('sourceBookId').get(bookId);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function saveCachedChapter(chapter: { id: string }): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('chapter_cache', 'readwrite');
+    tx.objectStore('chapter_cache').put(chapter);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getCachedChapter(id: string): Promise<unknown | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('chapter_cache', 'readonly');
+    const request = tx.objectStore('chapter_cache').get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
   });
 }
