@@ -12,7 +12,7 @@ import {
   invokeFanqieAction,
   isFanqieNativeBackendAvailable,
 } from './fanqieBackend';
-import { fetchNativeBookInfo, resolveNativeBookId } from './fanqieReaderAdapter';
+import { fetchNativeBookInfo, fetchNativeChapterContent, resolveNativeBookId } from './fanqieReaderAdapter';
 
 export type NativeDownloadStatus =
   | 'PREPARING'
@@ -233,14 +233,14 @@ async function materializeChapters(
     const cacheId = `${job.sourceBookId}:${itemId}`;
     let cached = await getCachedChapter(cacheId) as NativeCachedChapter | null;
     if (!cached?.complete) {
-      const raw = await invokeFanqieAction<unknown>(FANQIE_ACTIONS.chapterContent, {
-        book_id: job.sourceBookId,
-        item_id: itemId,
-      });
-      const record = unwrap(raw);
-      const title = String(record.title ?? record.chapter_title ?? meta.title ?? `第${index + 1}章`);
-      const rawContent = String(record.content ?? record.text ?? record.body ?? '');
-      const checked = validateCompleteChapter(title, rawContent);
+      let nativeChapter;
+      try {
+        nativeChapter = await fetchNativeChapterContent(job.sourceBookId, { ...meta, item_id: itemId }, { maxAttempts: 3 });
+      } catch (error) {
+        throw new Error(`第 ${index + 1} 章《${meta.title || itemId}》${error instanceof Error ? error.message : String(error)}`);
+      }
+      const title = nativeChapter.title || meta.title || `第${index + 1}章`;
+      const checked = validateCompleteChapter(title, nativeChapter.content);
       cached = {
         id: cacheId,
         bookId: job.sourceBookId,

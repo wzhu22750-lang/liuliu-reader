@@ -109,30 +109,50 @@ export async function fetchNativeBookInfo(bookId: string): Promise<{
   };
 }
 
-export async function fetchNativeChapterContent(bookId: string, chapter: FanqieNativeChapter): Promise<{
+export async function fetchNativeChapterContent(bookId: string, chapter: FanqieNativeChapter, options: { maxAttempts?: number } = {}): Promise<{
   title: string;
   content: string;
   wordCount?: number;
 }> {
   if (!isFanqieNativeBackendAvailable()) throw nativeBackendUnavailableError();
-  const itemId = asString(chapter.item_id, chapter.chapter_id, (chapter as Record<string, unknown>).itemId, (chapter as Record<string, unknown>).chapterId) || '';
+  const record = chapter as Record<string, unknown>;
+  const itemId = asString(chapter.item_id, chapter.chapter_id, record.itemId, record.chapterId) || '';
   const index = asNumber(chapter.index) ?? 0;
-  const raw = await invokeFanqieAction<unknown>(FANQIE_ACTIONS.chapterContent, {
-    book_id: bookId,
-    bookId,
-    item_id: itemId,
-    itemId,
-    chapter_index: index,
-    index,
-  });
-  const record = asRecord(raw);
-  const content = asString(record.content, record.text, record.body) || '';
-  if (!content.trim()) throw new Error(`章节“${chapter.title || itemId}”返回空正文`);
-  return {
-    title: asString(record.title, record.chapter_title) || chapter.title || `第${index + 1}章`,
-    content,
-    wordCount: asNumber(record.word_count, record.wordCount) || content.length,
-  };
+  if (!itemId) throw new Error(`章节“${chapter.title || index}”缺少 itemId`);
+  const maxAttempts = options.maxAttempts ?? 3;
+  let lastError: Error | null = null;
+  const payloads = [
+    {
+      book_id: bookId,
+      bookId,
+      item_id: itemId,
+      itemId,
+      chapter_id: itemId,
+      chapterId: itemId,
+      chapter_index: index,
+      index,
+    },
+    { book_id: bookId, item_id: itemId, chapter_id: itemId, chapter_index: index },
+  ];
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const payload = payloads[Math.min(attempt - 1, payloads.length - 1)];
+    try {
+      const raw = await invokeFanqieAction<unknown>(FANQIE_ACTIONS.chapterContent, payload);
+      const response = asRecord(raw);
+      const content = asString(response.content, response.text, response.body) || '';
+      if (!content.trim()) throw new Error('native response content 字段为空');
+      return {
+        title: asString(response.title, response.chapter_title) || chapter.title || `第${index + 1}章`,
+        content,
+        wordCount: asNumber(response.word_count, response.wordCount) || content.length,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn('[fanqie-native] chapter retry', { itemId, index, attempt, maxAttempts, error: lastError.message });
+      if (attempt < maxAttempts) await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+    }
+  }
+  throw new Error(`正文请求失败（Android native chapter_content；itemId=${itemId}；index=${index}）：${lastError?.message || '未知错误'}`);
 }
 
 export async function importNativeFanqieBook(

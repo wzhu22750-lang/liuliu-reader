@@ -91,12 +91,49 @@ export const FANQIE_NATIVE_COMMANDS = {
   export: null,
 } as const;
 
+function safePayload(payload?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!payload) return undefined;
+  const safe: Record<string, unknown> = {};
+  for (const key of ['book_id', 'bookId', 'item_id', 'itemId', 'chapter_id', 'chapterId', 'chapter_index', 'index', 'job_id']) {
+    if (key in payload) safe[key] = payload[key];
+  }
+  return safe;
+}
+
 export async function invokeFanqieDispatch<T>(envelope: FanqieDispatchEnvelope): Promise<T> {
   const command = FANQIE_NATIVE_COMMANDS.dispatch;
   if (!command) {
     throw new Error('番茄器 dispatch command 不可用');
   }
-  return invokeTauri<T>(command, envelope as unknown as Record<string, unknown>);
+  const startedAt = Date.now();
+  console.info('[fanqie-native] request', {
+    command,
+    action: envelope.action,
+    payload: safePayload(envelope.payload),
+    runtime: typeof window === 'undefined' ? 'unknown' : window.location.href,
+  });
+  try {
+    const response = await invokeTauri<T>(command, envelope as unknown as Record<string, unknown>);
+    const record = response && typeof response === 'object' ? response as Record<string, unknown> : undefined;
+    console.info('[fanqie-native] response', {
+      action: envelope.action,
+      elapsedMs: Date.now() - startedAt,
+      keys: record ? Object.keys(record).slice(0, 24) : [],
+      status: record?.status,
+      code: record?.code,
+      contentLength: typeof record?.content === 'string' ? record.content.length : undefined,
+    });
+    return response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[fanqie-native] error', {
+      action: envelope.action,
+      elapsedMs: Date.now() - startedAt,
+      message,
+      payload: safePayload(envelope.payload),
+    });
+    throw new Error(`Android native ${envelope.action} 请求失败：${message}`);
+  }
 }
 
 export function createFanqieActionRequest(
