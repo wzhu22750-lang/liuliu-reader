@@ -110,7 +110,7 @@ export async function invokeFanqieDispatch<T>(envelope: FanqieDispatchEnvelope):
     command,
     action: envelope.action,
     payload: safePayload(envelope.payload),
-    runtime: typeof window === 'undefined' ? 'unknown' : window.location.href,
+    runtime: typeof window === 'undefined' ? 'unknown' : (window.location?.href || 'unknown'),
   });
   try {
     const response = await invokeTauri<T>(command, envelope as unknown as Record<string, unknown>);
