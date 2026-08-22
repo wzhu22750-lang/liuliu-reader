@@ -29,12 +29,26 @@ cp -R "$ROOT/dist/." "$WORK/assets/"
 # The original Tauri Android shell starts WebView at http://tauri.localhost/.
 # Android otherwise blocks the local origin before the Rust/WebView asset
 # interception path can return the bundled React files.
+mkdir -p "$WORK/res/xml"
+cat > "$WORK/res/xml/network_security_config.xml" <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">tauri.localhost</domain>
+        <domain includeSubdomains="true">ipc.localhost</domain>
+        <domain includeSubdomains="true">asset.localhost</domain>
+    </domain-config>
+</network-security-config>
+XML
+
 python3 - "$WORK/AndroidManifest.xml" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 s = p.read_text()
 s = s.replace('android:usesCleartextTraffic="false"', 'android:usesCleartextTraffic="true"', 1)
+s = s.replace('android:usesCleartextTraffic="true"', 'android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/network_security_config"', 1)
 p.write_text(s)
 PY
 
@@ -54,7 +68,7 @@ python3 - "$WORK/apktool.yml" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-s = p.read_text().replace('versionCode: 100634', 'versionCode: 100635').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli')
+s = p.read_text().replace('versionCode: 100634', 'versionCode: 100636').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-cleartext-fix')
 p.write_text(s)
 PY
 
