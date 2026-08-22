@@ -9,6 +9,7 @@ OUTPUT="${1:-$FANQIE_ROOT/番茄器-liuli-reader.apk}"
 WORK="${WORK:-/private/tmp/liuli-apk-build}"
 SDK="${ANDROID_BUILD_TOOLS:-/private/tmp/fanqie-build-tools/android-sdk/build-tools/35.0.0}"
 KEYSTORE="${KEYSTORE:-$HOME/.android/debug.keystore}"
+PACKAGE_ID="${PACKAGE_ID:-com.pofl.fanqienoveldownloader}"
 
 for command_name in apktool "$SDK/zipalign" "$SDK/apksigner" "$SDK/aapt2"; do
   if [[ "$command_name" == /* ]]; then
@@ -44,6 +45,21 @@ p = Path(sys.argv[1])
 s = p.read_text().replace('versionCode: 100634', 'versionCode: 100635').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli')
 p.write_text(s)
 PY
+
+if [[ "$PACKAGE_ID" != "com.pofl.fanqienoveldownloader" ]]; then
+  python3 - "$WORK/AndroidManifest.xml" "$PACKAGE_ID" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+package_id = sys.argv[2]
+s = p.read_text()
+s = s.replace('package="com.pofl.fanqienoveldownloader"', f'package="{package_id}"', 1)
+s = s.replace('com.pofl.fanqienoveldownloader.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION', f'{package_id}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION')
+s = s.replace('com.pofl.fanqienoveldownloader.fileprovider', f'{package_id}.fileprovider')
+s = s.replace('com.pofl.fanqienoveldownloader.androidx-startup', f'{package_id}.androidx-startup')
+p.write_text(s)
+PY
+fi
 
 UNSIGNED="$WORK/unsigned.apk"
 ALIGNED="$WORK/aligned.apk"
