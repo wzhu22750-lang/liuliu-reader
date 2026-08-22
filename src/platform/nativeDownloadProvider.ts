@@ -117,8 +117,8 @@ function validateCompleteChapter(title: string, rawContent: string): { content: 
     throw new Error(`章节《${title}》仍是锁章预览，已拒绝导入`);
   }
   const decoded = decodeTomatoText(normalized);
-  assertTomatoTextExportable(decoded.text);
-  const content = decoded.text.trim();
+  assertTomatoTextExportable(decoded.content);
+  const content = decoded.content.trim();
   const wordCount = [...content].filter((character) => !/\s/.test(character)).length;
   if (!wordCount) throw new Error(`章节《${title}》完整性校验失败`);
   return { content, wordCount };
