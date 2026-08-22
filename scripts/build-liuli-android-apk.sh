@@ -39,6 +39,14 @@ if needle not in s:
 s = s.replace(needle, replacement, 1)
 p.write_text(s)
 PYDEBUG
+  python3 - "$WORK/AndroidManifest.xml" <<'PYDEBUGMANIFEST'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace('<application ', '<application android:debuggable="true" ', 1)
+p.write_text(s)
+PYDEBUGMANIFEST
 fi
 
 # The replacement shell uses the HTTPS Tauri origin and Android's local
