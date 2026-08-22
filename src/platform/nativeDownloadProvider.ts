@@ -81,7 +81,10 @@ function unwrap(value: unknown): Record<string, unknown> {
   let current = value;
   while (current && typeof current === 'object' && !Array.isArray(current)) {
     const record = current as Record<string, unknown>;
-    const next = record.data ?? record.result ?? record.payload;
+    if (['id', 'job_id', 'status', 'book_id', 'content', 'items', 'chapters'].some((key) => key in record)) {
+      return record;
+    }
+    const next = record.data ?? record.payload ?? record.result;
     if (!next || next === current || typeof next !== 'object') return record;
     current = next;
   }
@@ -110,7 +113,7 @@ function chapterIdentity(chapter: FanqieNativeChapter, index: number): string {
   return String(chapter.item_id ?? chapter.chapter_id ?? record.itemId ?? record.chapterId ?? index);
 }
 
-function validateCompleteChapter(title: string, rawContent: string): { content: string; wordCount: number } {
+export function validateCompleteChapter(title: string, rawContent: string): { content: string; wordCount: number } {
   const normalized = normalizeContent(rawContent);
   if (!normalized) throw new Error(`章节《${title}》正文为空`);
   if (/本章为锁定章节|下载客户端继续阅读|打开番茄小说.*阅读|本章未完/i.test(normalized)) {
@@ -124,7 +127,7 @@ function validateCompleteChapter(title: string, rawContent: string): { content: 
   return { content, wordCount };
 }
 
-function nativeStatus(value?: string): NativeDownloadStatus {
+export function nativeStatus(value?: string): NativeDownloadStatus {
   switch ((value || '').toLowerCase()) {
     case 'queued': return 'QUEUED';
     case 'running':
@@ -280,8 +283,17 @@ export async function downloadNativeFanqieBook(
   if (!info.chapters.length) throw new Error('Android 原生 Provider 未返回章节目录');
   const now = Date.now();
   const previous = await getDownloadJobByBookId(bookId) as NativeDownloadJobState | null;
-  const job: NativeDownloadJobState = previous && previous.status !== 'COMPLETED'
-    ? { ...previous, sourceInput: input, title: info.title, author: info.author, totalChapters: info.chapters.length, error: undefined }
+  const reusableCompletedJob = previous?.status === 'COMPLETED' && previous.totalChapters === info.chapters.length;
+  const job: NativeDownloadJobState = previous
+    ? {
+        ...previous,
+        nativeJobId: reusableCompletedJob ? previous.nativeJobId : (previous.status === 'COMPLETED' ? undefined : previous.nativeJobId),
+        sourceInput: input,
+        title: info.title,
+        author: info.author,
+        totalChapters: info.chapters.length,
+        error: undefined,
+      }
     : {
         id: `native_import_${bookId}`,
         sourceBookId: bookId,
@@ -298,7 +310,7 @@ export async function downloadNativeFanqieBook(
   await persist(job);
   report(job, onProgress);
   try {
-    await waitForNativeJob(job, onProgress);
+    if (!reusableCompletedJob) await waitForNativeJob(job, onProgress);
     const chapters = await materializeChapters(job, info.chapters, onProgress);
     if (chapters.length !== info.chapters.length) throw new Error('章节缓存数量与目录不一致');
     job.status = 'COMPLETED';
@@ -342,7 +354,7 @@ async function controlMostRecent(action: 'pause' | 'resume' | 'retry' | 'cancel'
   if (action === 'pause') control.pausedLocally = true;
   if (action === 'resume') control.pausedLocally = false;
   if (action === 'cancel') control.canceled = true;
-  if (job.nativeJobId) {
+  if (job.nativeJobId && job.status !== 'VERIFYING' && job.status !== 'COMPLETED') {
     const nativeAction = action === 'pause' ? FANQIE_ACTIONS.pauseJob
       : action === 'resume' ? FANQIE_ACTIONS.resumeJob
       : action === 'retry' ? FANQIE_ACTIONS.retryDownload

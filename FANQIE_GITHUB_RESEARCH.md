@@ -92,15 +92,6 @@ https://changdunovel.com/t/BTRdctuGVyI/
 
 官方 Android 正文链路涉及动态签名、设备身份和内容密钥。公开高星项目也把核心实现保存在私有依赖中。若要接入完整正文，应该配置用户有权使用的明文 Provider，或接入获得授权的服务；不应把不明来源的公共 Provider 硬编码进客户端。
 
-## 2026-08-21 本地 Provider 配置结果
+## 2026-08-22 Android 原生迁移
 
-公开 Provider 地址均已实测失效，因此没有把陌生远端服务写入应用配置。最终采用 `zhongbai2333/Tomato-Novel-Downloader` 2.4.13 官方 Release 作为 localhost sidecar：
-
-- 安装位置：`.local/tnd-provider/bin/tomato-novel-downloader`
-- 监听地址：`127.0.0.1:18429`
-- 缓存目录：`.local/tnd-provider/library/{book_id}/downloaded_chapters.jsonl`
-- Provider 标识：`tnd-sidecar-v2.4.13`
-- sidecar 自动启动，无需用户手动运行第二个服务。
-- Release 下载后执行 SHA-256 校验；二进制和正文缓存均被 `.gitignore` 排除。
-
-真实《神通者》全目录测试：38 个目录项全部通过；前 10 项来自网页完整正文，后 28 项来自本地 sidecar；无失败章节、无预览正文、无 PUA 残留。总测试耗时约 56.6 秒。
+旧的 localhost sidecar 方案仅作为历史调研结论，不再属于当前运行架构。Android APK 现在通过自身的 Tauri/Rust native backend 创建后台下载任务，逐章使用 native cache，并在全部章节校验完成后原子导入书架。前端不再启动桌面二进制，也不连接本机端口。
