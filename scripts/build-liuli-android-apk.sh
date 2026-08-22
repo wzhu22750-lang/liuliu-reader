@@ -26,49 +26,38 @@ rm -rf "$WORK"
 cp -a "$DECODED" "$WORK"
 cp -R "$ROOT/dist/." "$WORK/assets/"
 
-# The original Tauri Android shell starts WebView at http://tauri.localhost/.
-# Android otherwise blocks the local origin before the Rust/WebView asset
-# interception path can return the bundled React files.
-mkdir -p "$WORK/res/xml"
-cat > "$WORK/res/xml/network_security_config.xml" <<'XML'
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">tauri.localhost</domain>
-        <domain includeSubdomains="true">ipc.localhost</domain>
-        <domain includeSubdomains="true">asset.localhost</domain>
-    </domain-config>
-</network-security-config>
-XML
-
-python3 - "$WORK/AndroidManifest.xml" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-s = p.read_text()
-s = s.replace('android:usesCleartextTraffic="false"', 'android:usesCleartextTraffic="true"', 1)
-s = s.replace('android:usesCleartextTraffic="true"', 'android:usesCleartextTraffic="true" android:networkSecurityConfig="@xml/network_security_config"', 1)
-p.write_text(s)
-PY
+# The replacement shell uses the HTTPS Tauri origin and Android's local
+# WebViewAssetLoader. Keep cleartext disabled; no localhost server is involved.
 
 python3 - "$WORK/smali/com/pofl/fanqienoveldownloader/RustWebViewClient.smali" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
 s = p.read_text()
+# The original native library was compiled with useHttpsScheme=false, so its
+# runtime-derived asset domain does not match the corrected HTTPS origin.
+s = s.replace('''    invoke-virtual {p1}, Lcom/pofl/fanqienoveldownloader/RustWebView;->getId()Ljava/lang/String;
+
+    move-result-object p1
+
+    invoke-static {p1}, Lcom/pofl/fanqienoveldownloader/Rust;->assetLoaderDomain(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object p1
+''', '''    const-string p1, "tauri.localhost"
+''', 1)
 old = '''    invoke-static {v0}, Lcom/pofl/fanqienoveldownloader/Rust;->withAssetLoader(Ljava/lang/String;)Z\n\n    move-result v0\n\n    if-eqz v0, :cond_1\n'''
 new = '''    # Serve the replacement React bundle from APK assets; keep Rust JNI/IPC intact.\n    const/4 v0, 0x1\n\n    if-eqz v0, :cond_1\n'''
 if old not in s:
     raise SystemExit('asset-loader patch point not found')
-p.write_text(s.replace(old, new, 1))
+s = s.replace(old, new, 1)
+p.write_text(s)
 PY
 
 python3 - "$WORK/apktool.yml" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-s = p.read_text().replace('versionCode: 100634', 'versionCode: 100638').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-asset-fix')
+s = p.read_text().replace('versionCode: 100634', 'versionCode: 100639').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-asset-domain-fix')
 p.write_text(s)
 PY
 
