@@ -72,6 +72,44 @@ s = p.read_text().replace('versionCode: 100634', 'versionCode: 100637').replace(
 p.write_text(s)
 PY
 
+python3 - "$WORK/smali/com/pofl/fanqienoveldownloader/RustWebView.smali" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace('.method public loadUrl(Ljava/lang/String;)V\n    .locals 1\n', '.method public loadUrl(Ljava/lang/String;)V\n    .locals 2\n', 1)
+s = s.replace('''    invoke-static {p1, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
+
+    .line 55
+    iget-object v0, p0, Lcom/pofl/fanqienoveldownloader/RustWebView;->id:Ljava/lang/String;
+''', '''    invoke-static {p1, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
+
+    const-string v0, "http://tauri.localhost"
+    const-string v1, "https://tauri.localhost"
+    invoke-virtual {p1, v0, v1}, Ljava/lang/String;->replace(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+    move-result-object p1
+
+    .line 55
+    iget-object v0, p0, Lcom/pofl/fanqienoveldownloader/RustWebView;->id:Ljava/lang/String;
+''', 1)
+s = s.replace('.method public loadUrl(Ljava/lang/String;Ljava/util/Map;)V\n    .locals 1\n', '.method public loadUrl(Ljava/lang/String;Ljava/util/Map;)V\n    .locals 2\n', 1)
+s = s.replace('''    invoke-static {p2, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
+
+    .line 61
+    iget-object v0, p0, Lcom/pofl/fanqienoveldownloader/RustWebView;->id:Ljava/lang/String;
+''', '''    invoke-static {p2, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
+
+    const-string v0, "http://tauri.localhost"
+    const-string v1, "https://tauri.localhost"
+    invoke-virtual {p1, v0, v1}, Ljava/lang/String;->replace(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
+    move-result-object p1
+
+    .line 61
+    iget-object v0, p0, Lcom/pofl/fanqienoveldownloader/RustWebView;->id:Ljava/lang/String;
+''', 1)
+p.write_text(s)
+PY
+
 if [[ "$PACKAGE_ID" != "com.pofl.fanqienoveldownloader" ]]; then
   python3 - "$WORK/AndroidManifest.xml" "$PACKAGE_ID" <<'PY'
 from pathlib import Path
