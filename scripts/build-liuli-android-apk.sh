@@ -68,7 +68,7 @@ python3 - "$WORK/apktool.yml" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-s = p.read_text().replace('versionCode: 100634', 'versionCode: 100637').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-https-fix')
+s = p.read_text().replace('versionCode: 100634', 'versionCode: 100638').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-asset-fix')
 p.write_text(s)
 PY
 
@@ -84,8 +84,8 @@ s = s.replace('''    invoke-static {p1, v0}, Lkotlin/jvm/internal/Intrinsics;->c
     iget-object v0, p0, Lcom/pofl/fanqienoveldownloader/RustWebView;->id:Ljava/lang/String;
 ''', '''    invoke-static {p1, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
 
-    const-string v0, "http://tauri.localhost"
-    const-string v1, "https://tauri.localhost"
+    const-string v0, "http://tauri.localhost/"
+    const-string v1, "https://tauri.localhost/index.html"
     invoke-virtual {p1, v0, v1}, Ljava/lang/String;->replace(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
     move-result-object p1
 
@@ -99,8 +99,8 @@ s = s.replace('''    invoke-static {p2, v0}, Lkotlin/jvm/internal/Intrinsics;->c
     iget-object v0, p0, Lcom/pofl/fanqienoveldownloader/RustWebView;->id:Ljava/lang/String;
 ''', '''    invoke-static {p2, v0}, Lkotlin/jvm/internal/Intrinsics;->checkNotNullParameter(Ljava/lang/Object;Ljava/lang/String;)V
 
-    const-string v0, "http://tauri.localhost"
-    const-string v1, "https://tauri.localhost"
+    const-string v0, "http://tauri.localhost/"
+    const-string v1, "https://tauri.localhost/index.html"
     invoke-virtual {p1, v0, v1}, Ljava/lang/String;->replace(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;
     move-result-object p1
 
