@@ -68,7 +68,7 @@ python3 - "$WORK/apktool.yml" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
-s = p.read_text().replace('versionCode: 100634', 'versionCode: 100636').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-cleartext-fix')
+s = p.read_text().replace('versionCode: 100634', 'versionCode: 100637').replace('versionName: 2026.7.26-709', 'versionName: 2026.7.26-709-liuli-https-fix')
 p.write_text(s)
 PY
 
