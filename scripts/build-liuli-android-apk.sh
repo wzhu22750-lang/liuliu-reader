@@ -26,6 +26,18 @@ rm -rf "$WORK"
 cp -a "$DECODED" "$WORK"
 cp -R "$ROOT/dist/." "$WORK/assets/"
 
+# The original Tauri Android shell starts WebView at http://tauri.localhost/.
+# Android otherwise blocks the local origin before the Rust/WebView asset
+# interception path can return the bundled React files.
+python3 - "$WORK/AndroidManifest.xml" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace('android:usesCleartextTraffic="false"', 'android:usesCleartextTraffic="true"', 1)
+p.write_text(s)
+PY
+
 python3 - "$WORK/smali/com/pofl/fanqienoveldownloader/RustWebViewClient.smali" <<'PY'
 from pathlib import Path
 import sys
