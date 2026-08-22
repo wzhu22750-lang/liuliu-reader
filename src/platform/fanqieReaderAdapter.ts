@@ -58,7 +58,7 @@ export function nativeBackendUnavailableError(): Error {
 
 export async function searchFanqieBooks(query: string): Promise<FanqieSearchItem[]> {
   if (!isFanqieNativeBackendAvailable()) throw nativeBackendUnavailableError();
-  const raw = await invokeFanqieAction<unknown>(FANQIE_ACTIONS.search, { query, keyword: query });
+  const raw = await invokeFanqieAction<unknown>(FANQIE_ACTIONS.search, { q: query, query, keyword: query });
   const unwrapped = unwrap(raw);
   const list = Array.isArray(unwrapped)
     ? unwrapped
