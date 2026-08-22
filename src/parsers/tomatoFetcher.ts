@@ -1,7 +1,14 @@
 import { Book, Chapter } from '../types';
 import { saveBook, getBookById } from '../db/indexedDB';
 import { assertTomatoTextExportable, decodeTomatoText, TomatoDecodeStatus } from './tomatoObfuscation';
-import { fetchNativeBookInfo, fetchNativeChapterContent, importNativeFanqieBook } from '../platform/fanqieReaderAdapter';
+import { fetchNativeBookInfo, fetchNativeChapterContent } from '../platform/fanqieReaderAdapter';
+import {
+  cancelNativeDownload,
+  downloadNativeFanqieBook,
+  pauseNativeDownload,
+  resumeNativeDownload,
+  retryNativeDownload,
+} from '../platform/nativeDownloadProvider';
 import { isFanqieNativeBackendAvailable } from '../platform/fanqieBackend';
 import { isTauriRuntime } from '../platform/tauriRuntime';
 
@@ -44,6 +51,10 @@ export interface TomatoFetchProgress {
   statusText?: string;
   error?: string;
   chaptersData?: { title: string; content: string }[];
+  phase?: 'PREPARING' | 'QUEUED' | 'RUNNING' | 'PAUSED' | 'VERIFYING' | 'COMPLETED' | 'FAILED' | 'CANCELED';
+  canPause?: boolean;
+  canResume?: boolean;
+  canRetry?: boolean;
 }
 
 export interface ParsedUserInput {
@@ -287,11 +298,43 @@ export async function startTomatoNovelImport(
   });
 
   if (isTauriRuntime() && isFanqieNativeBackendAvailable()) {
-    const nativeBook = await importNativeFanqieBook(urlOrInput, parsed.titleHint, (completed, total, title) => {
-      emit({ bookId: urlOrInput, totalChapters: total, completedChapters: completed, currentChapterTitle: title, statusText: `正在获取正文：${completed} / ${total} 章`, isComplete: false });
+    const nativeBook = await downloadNativeFanqieBook(urlOrInput, parsed.titleHint, ({ job, canPause, canResume, canRetry }) => {
+      const phaseText = job.status === 'VERIFYING'
+        ? 'Android 已下载完成，正在逐章校验并写入本地缓存'
+        : job.status === 'PAUSED'
+          ? '下载已暂停，可随时继续'
+          : job.status === 'FAILED'
+            ? 'Android 后台任务失败，可重试并从缓存继续'
+            : job.status === 'QUEUED' || job.status === 'PREPARING'
+              ? '正在创建 Android 后台下载任务'
+              : 'Android 后台正在下载完整正文';
+      emit({
+        bookId: job.sourceBookId,
+        totalChapters: job.totalChapters,
+        completedChapters: job.completedChapters,
+        currentChapterTitle: job.currentChapterTitle,
+        statusText: phaseText,
+        isComplete: job.status === 'COMPLETED',
+        error: job.error,
+        phase: job.status,
+        canPause,
+        canResume,
+        canRetry,
+      });
     });
+    // Atomic bookshelf commit: download jobs and chapter cache are separate stores;
+    // the readable Book record is written only after every chapter is complete.
     await saveBook(nativeBook);
-    emit({ bookId: nativeBook.id, totalChapters: nativeBook.totalChapters, completedChapters: nativeBook.totalChapters, currentChapterTitle: nativeBook.chapters.at(-1)?.title || '', statusText: `《${nativeBook.title}》导入完成，已自动加入书架`, isComplete: true, chaptersData: nativeBook.chapters.map((c) => ({ title: c.title, content: c.content })) });
+    emit({
+      bookId: nativeBook.id,
+      totalChapters: nativeBook.totalChapters,
+      completedChapters: nativeBook.totalChapters,
+      currentChapterTitle: nativeBook.chapters.at(-1)?.title || '',
+      statusText: `《${nativeBook.title}》完整下载、校验并导入书架`,
+      isComplete: true,
+      phase: 'COMPLETED',
+      chaptersData: nativeBook.chapters.map((c) => ({ title: c.title, content: c.content })),
+    });
     return nativeBook;
   }
 
@@ -373,3 +416,11 @@ export async function startTomatoNovelImport(
   return newBook;
 }
 
+
+
+export {
+  pauseNativeDownload as pauseTomatoNovelImport,
+  resumeNativeDownload as resumeTomatoNovelImport,
+  retryNativeDownload as retryTomatoNovelImport,
+  cancelNativeDownload as cancelTomatoNovelImport,
+};

@@ -5,6 +5,8 @@ import {
   downloadNovelAsTxt,
   extractUrlAndTitle,
   TomatoFetchProgress,
+  pauseTomatoNovelImport,
+  resumeTomatoNovelImport,
 } from '../parsers/tomatoFetcher';
 import { Book, ReaderSettings } from '../types';
 
@@ -41,6 +43,22 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose, theme }
       setError(err.message || '抓取小说失败，请检查链接或稍后重试');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePause = async () => {
+    try {
+      await pauseTomatoNovelImport();
+    } catch (err: any) {
+      setError(err.message || '暂停失败');
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      await resumeTomatoNovelImport();
+    } catch (err: any) {
+      setError(err.message || '继续失败');
     }
   };
 
@@ -175,6 +193,12 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose, theme }
                 )}
 
                 <div className="ink-tomato-progress-actions">
+                {progress.canPause && (
+                  <button type="button" onClick={handlePause}>暂停下载</button>
+                )}
+                {progress.canResume && (
+                  <button type="button" className="is-solid" onClick={handleResume}>继续下载</button>
+                )}
                   <button type="button" className="is-solid" onClick={handleOpenReaderNow} disabled={!importedBook || !progress.isComplete}>
                     <ArrowRight className="w-4 h-4" />
                     {progress.isComplete ? '进入阅读' : '等待全本完成'}
@@ -344,6 +368,12 @@ export const TomatoImportModal: React.FC<Props> = ({ onSuccess, onClose, theme }
               </div>
 
               {/* Actions: only a fully READY book can be read or exported */}
+              {progress.canPause && (
+                <button type="button" onClick={handlePause} className="w-full px-4 py-2 text-xs font-medium bg-white text-[#141413] border border-[#e8e6df] rounded-xl">暂停下载</button>
+              )}
+              {progress.canResume && (
+                <button type="button" onClick={handleResume} className="w-full px-4 py-2 text-xs font-medium bg-[#da7756] text-white rounded-xl">继续下载</button>
+              )}
               {progress.error && (
                 <button
                   type="button"
