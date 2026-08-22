@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FANQIE_ROOT="${FANQIE_ROOT:-/Users/kuangqie/Documents/VibeCoding/番茄器}"
 DECODED="${DECODED:-$FANQIE_ROOT/fanqie-apk/apktool_out}"
-OUTPUT="${1:-$FANQIE_ROOT/番茄器-liuli-reader.apk}"
+OUTPUT="${1:-$ROOT/liuli-reader-native.apk}"
 WORK="${WORK:-/private/tmp/liuli-apk-build}"
 SDK="${ANDROID_BUILD_TOOLS:-/private/tmp/fanqie-build-tools/android-sdk/build-tools/35.0.0}"
 KEYSTORE="${KEYSTORE:-$HOME/.android/debug.keystore}"
@@ -25,6 +25,21 @@ npm --prefix "$ROOT" run build
 rm -rf "$WORK"
 cp -a "$DECODED" "$WORK"
 cp -R "$ROOT/dist/." "$WORK/assets/"
+
+if [[ "${DEBUG_WEBVIEW:-0}" == "1" ]]; then
+  python3 - "$WORK/smali/com/pofl/fanqienoveldownloader/RustWebView.smali" <<'PYDEBUG'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+needle = "    invoke-direct {p0, p1}, Landroid/webkit/WebView;-><init>(Landroid/content/Context;)V\n"
+replacement = needle + "\n    const/4 v0, 0x1\n\n    invoke-static {v0}, Landroid/webkit/WebView;->setWebContentsDebuggingEnabled(Z)V\n"
+if needle not in s:
+    raise SystemExit('WebView debug patch point not found')
+s = s.replace(needle, replacement, 1)
+p.write_text(s)
+PYDEBUG
+fi
 
 # The replacement shell uses the HTTPS Tauri origin and Android's local
 # WebViewAssetLoader. Keep cleartext disabled; no localhost server is involved.
