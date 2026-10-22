@@ -1,4 +1,4 @@
-export type SourceType = 'txt' | 'epub' | 'tomato' | 'demo';
+export type SourceType = 'txt' | 'epub' | 'demo';
 
 export interface Chapter {
   id: string;
@@ -6,7 +6,6 @@ export interface Chapter {
   title: string;
   content: string; // Plain text with \n\n paragraph separators
   wordCount: number;
-  fontUrl?: string;
 }
 
 export interface BookProgress {
@@ -17,25 +16,13 @@ export interface BookProgress {
   lastReadTime: number;
 }
 
-export type BookImportStatus = 'IMPORTING' | 'READY' | 'FAILED';
-
-export interface FetchStatus {
-  total: number;
-  completed: number;
-  isFetching: boolean;
-  status?: BookImportStatus;
-  error?: string;
-}
-
 export interface Book {
   id: string;
   title: string;
   author: string;
   coverUrl?: string;
   coverColor?: string; // Aesthetic gradient or minimal pastel background
-  fontUrl?: string; // custom web font woff2 for novel platforms
   sourceType: SourceType;
-  sourceUrl?: string;
   totalChapters: number;
   totalWords?: number; // total word count across all chapters
   chapters: Chapter[];
@@ -43,7 +30,6 @@ export interface Book {
   createdAt: number;
   updatedAt: number;
   isArchived?: boolean; // 移出书库/隐去 (true) vs 正常在书架中
-  fetchStatus?: FetchStatus; // for streaming/tomato
 }
 
 export type HighlightStyle = 'amber' | 'emerald' | 'rose' | 'sky' | 'purple' | 'underline' | 'wavy';
@@ -101,12 +87,6 @@ export interface ReaderSettings {
   spoilerScope: 'current' | 'chapter' | 'book'; // default 'current'
   lastHighlightStyle: HighlightStyle;
   autoSnapSentence: boolean; // default true
-}
-
-export interface AISettings {
-  apiBaseUrl: string; // e.g. https://api.deepseek.com/v1 or custom proxy
-  apiKey: string;
-  modelName: string; // e.g. deepseek-chat, gemini-3.7-flash, gpt-4o-mini
 }
 
 export interface BackupData {

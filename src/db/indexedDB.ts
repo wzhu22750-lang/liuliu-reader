@@ -5,7 +5,6 @@ import {
   Bookmark,
   AIInterpretation,
   ReaderSettings,
-  AISettings,
   BackupData,
 } from '../types';
 import { DEMO_BOOKS } from '../parsers/demoBooks';
@@ -21,12 +20,6 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   spoilerScope: 'current',
   lastHighlightStyle: 'amber',
   autoSnapSentence: true,
-};
-
-export const DEFAULT_AI_SETTINGS: AISettings = {
-  apiBaseUrl: '',
-  apiKey: '',
-  modelName: 'gemini-3.7-flash',
 };
 
 export function openDB(): Promise<IDBDatabase> {
@@ -66,18 +59,6 @@ export function openDB(): Promise<IDBDatabase> {
 
       if (!db.objectStoreNames.contains('app_settings')) {
         db.createObjectStore('app_settings', { keyPath: 'key' });
-      }
-
-      if (!db.objectStoreNames.contains('download_jobs')) {
-        const jobStore = db.createObjectStore('download_jobs', { keyPath: 'id' });
-        jobStore.createIndex('sourceBookId', 'sourceBookId', { unique: true });
-        jobStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains('chapter_cache')) {
-        const cacheStore = db.createObjectStore('chapter_cache', { keyPath: 'id' });
-        cacheStore.createIndex('bookId', 'bookId', { unique: false });
-        cacheStore.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
     };
 
@@ -159,9 +140,9 @@ export async function saveBook(book: Book): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('books', 'readwrite');
     const store = tx.objectStore('books');
-    const request = store.put(book);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    store.put(book);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error('书籍保存事务失败')); };
   });
 }
 
@@ -432,30 +413,6 @@ export async function saveReaderSettings(settings: ReaderSettings): Promise<void
   });
 }
 
-export async function getAISettings(): Promise<AISettings> {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction('app_settings', 'readonly');
-    const store = tx.objectStore('app_settings');
-    const request = store.get('ai_settings');
-    request.onsuccess = () => {
-      resolve({ ...DEFAULT_AI_SETTINGS, ...(request.result?.value || {}) });
-    };
-    request.onerror = () => resolve(DEFAULT_AI_SETTINGS);
-  });
-}
-
-export async function saveAISettings(settings: AISettings): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('app_settings', 'readwrite');
-    const store = tx.objectStore('app_settings');
-    const request = store.put({ key: 'ai_settings', value: settings });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
 // ---------------- BACKUP & RESTORE ----------------
 export async function generateBackup(type: 'full' | 'data-only'): Promise<BackupData> {
   const [books, excerpts, highlights, bookmarks, readerSettings] = await Promise.all([
@@ -557,47 +514,5 @@ export async function restoreBackup(backup: BackupData): Promise<{ success: bool
   return new Promise((resolve, reject) => {
     tx.oncomplete = () => resolve({ success: true, message: '备份已成功恢复！' });
     tx.onerror = () => reject(tx.error);
-  });
-}
-
-
-// ---------------- NATIVE DOWNLOAD OPERATIONS ----------------
-export async function saveDownloadJob(job: { id: string }): Promise<void> {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction('download_jobs', 'readwrite');
-    tx.objectStore('download_jobs').put(job);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-export async function getDownloadJobByBookId(bookId: string): Promise<unknown | null> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('download_jobs', 'readonly');
-    const request = tx.objectStore('download_jobs').index('sourceBookId').get(bookId);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function saveCachedChapter(chapter: { id: string }): Promise<void> {
-  const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction('chapter_cache', 'readwrite');
-    tx.objectStore('chapter_cache').put(chapter);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-export async function getCachedChapter(id: string): Promise<unknown | null> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('chapter_cache', 'readonly');
-    const request = tx.objectStore('chapter_cache').get(id);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
   });
 }

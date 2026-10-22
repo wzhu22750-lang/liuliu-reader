@@ -2,31 +2,26 @@ import React, { useState, useEffect } from 'react';
 import {
   X,
   Settings,
-  Bot,
   ShieldCheck,
   Download,
   Upload,
   HardDrive,
   CheckCircle2,
-  AlertCircle,
   Database,
-  KeyRound,
   FileSpreadsheet,
   BookOpen,
-  Globe2,
   FolderOpen,
   Palette,
   ChevronRight,
 } from 'lucide-react';
 import {
-  getAISettings,
-  saveAISettings,
   getReaderSettings,
   saveReaderSettings,
   generateBackup,
   restoreBackup,
 } from '../db/indexedDB';
-import { AISettings, ReaderSettings, BackupData } from '../types';
+import { ReaderSettings, BackupData } from '../types';
+import { saveJsonFile } from '../platform/saveJsonFile';
 
 interface Props {
   onClose: () => void;
@@ -36,27 +31,17 @@ interface Props {
 }
 
 export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, theme, onThemeChange }) => {
-  const [aiSettings, setAiSettings] = useState<AISettings>({
-    apiBaseUrl: '',
-    apiKey: '',
-    modelName: 'gemini-3.7-flash',
-  });
   const [readerSettings, setReaderSettings] = useState<ReaderSettings | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [testStatus, setTestStatus] = useState<string | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
-    Promise.all([getAISettings(), getReaderSettings()]).then(([ai, reader]) => {
-      setAiSettings(ai);
-      setReaderSettings(reader);
-    });
+    getReaderSettings().then(setReaderSettings);
   }, []);
 
-  const handleSaveAISettings = async () => {
-    await saveAISettings(aiSettings);
+  const handleSaveSettings = async () => {
     if (readerSettings) {
       await saveReaderSettings(readerSettings);
     }
@@ -65,55 +50,13 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
-  const handleTestAIConnection = async () => {
-    setTestStatus('testing');
-    try {
-      const res = await fetch('/api/ai/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selectedText: '知行合一',
-          precedingText: '阳明心学之旨，在于致良知。',
-          bookTitle: '心学札记',
-          chapterTitle: '第一卷',
-          spoilerScope: 'current',
-          customConfig: aiSettings.apiKey
-            ? {
-                apiBaseUrl: aiSettings.apiBaseUrl,
-                apiKey: aiSettings.apiKey,
-                modelName: aiSettings.modelName,
-              }
-            : undefined,
-        }),
-      });
-
-      if (res.ok) {
-        setTestStatus('success');
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setTestStatus(`failed: ${data.error || res.status}`);
-      }
-    } catch (err: any) {
-      setTestStatus(`failed: ${err.message}`);
-    }
-  };
-
   const handleExportBackup = async (type: 'full' | 'data-only') => {
     setBackupLoading(true);
     try {
       const backup = await generateBackup(type);
       const jsonStr = JSON.stringify(backup, null, 2);
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
       const dateStr = new Date().toISOString().slice(0, 10);
-      a.download = `ReaderAI_${type === 'full' ? 'FullBackup' : 'DataOnly'}_${dateStr}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      await saveJsonFile(`ReaderAI_${type === 'full' ? 'FullBackup' : 'DataOnly'}_${dateStr}.json`, jsonStr);
     } catch (err: any) {
       alert('备份导出失败：' + err.message);
     } finally {
@@ -162,7 +105,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
           <div className="ink-settings-group">
             <button type="button" className="ink-setting-row" onClick={() => setShowAdvanced((value) => !value)}>
               <BookOpen className="ink-setting-icon" />
-              <span><strong>书源管理</strong><small>导入、整理和管理本地书籍</small></span><ChevronRight className="ink-setting-arrow" />
+              <span><strong>本地书库</strong><small>导入、整理和管理本地书籍</small></span><ChevronRight className="ink-setting-arrow" />
             </button>
             <button type="button" className="ink-setting-row" onClick={() => setShowAdvanced((value) => !value)}>
               <Settings className="ink-setting-icon" />
@@ -176,7 +119,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
               </select>
             </div>
             <label className="ink-setting-row">
-              <Globe2 className="ink-setting-icon" />
+              <BookOpen className="ink-setting-icon" />
               <span><strong>智能选段</strong><small>按句号、感叹号或问号吸附完整句子</small></span>
               <input type="checkbox" checked={readerSettings.autoSnapSentence} onChange={async (event) => { const next = { ...readerSettings, autoSnapSentence: event.target.checked }; setReaderSettings(next); await saveReaderSettings(next); }} aria-label="智能选段" />
             </label>
@@ -195,18 +138,13 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
           </div>
 
           <button type="button" className="ink-advanced-toggle" onClick={() => setShowAdvanced((value) => !value)}>
-            {showAdvanced ? '收起高级设置' : '打开 AI 与备份高级设置'}
+            {showAdvanced ? '收起高级设置' : '打开备份高级设置'}
           </button>
 
           {showAdvanced && (
             <div className="ink-advanced-panel">
-              <h2>AI 服务</h2>
-              <label>API Base URL<input value={aiSettings.apiBaseUrl} onChange={(event) => setAiSettings({ ...aiSettings, apiBaseUrl: event.target.value })} placeholder="留空则使用默认后端" /></label>
-              <label>API Key<input type="password" value={aiSettings.apiKey} onChange={(event) => setAiSettings({ ...aiSettings, apiKey: event.target.value })} placeholder="仅保存在本地" /></label>
-              <label>模型名称<input value={aiSettings.modelName} onChange={(event) => setAiSettings({ ...aiSettings, modelName: event.target.value })} /></label>
-              <div className="ink-advanced-actions"><button type="button" onClick={handleTestAIConnection}>测试连接</button><button type="button" onClick={handleSaveAISettings}>保存设置</button></div>
+              <h2>本地备份与恢复</h2>
               <div className="ink-backup-actions"><button type="button" onClick={() => handleExportBackup('full')}>完整备份</button><label>恢复备份<input type="file" accept=".json" onChange={handleRestoreFile} /></label></div>
-              {testStatus && <p className="ink-status">{testStatus === 'success' ? '连接正常' : testStatus === 'testing' ? '正在测试…' : testStatus}</p>}
               {restoreMessage && <p className="ink-status">{restoreMessage}</p>}
             </div>
           )}
@@ -227,7 +165,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
             <div>
               <h2 className="text-base font-semibold tracking-tight">应用设置与数据中心</h2>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                AI 语境模型配置、防剧透预设与本地双模式备份
+                阅读偏好设置与本地双模式备份
               </p>
             </div>
           </div>
@@ -241,84 +179,6 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Section 1: AI API Configuration */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
-              <KeyRound className="w-4 h-4 text-[#da7756]" />
-              <span>AI API 全局配置</span>
-            </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-              默认自动调用后端 Gemini 3.7 模型。若需要，也可在此填入自定义 OpenAI / DeepSeek / 通义千问等兼容 API。
-            </p>
-
-            <div className="space-y-3 pt-1">
-              <div>
-                <label className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1">
-                  API Base URL (可选)
-                </label>
-                <input
-                  type="text"
-                  placeholder="例如：https://api.deepseek.com/v1 (留空则使用默认后端)"
-                  value={aiSettings.apiBaseUrl}
-                  onChange={(e) => setAiSettings({ ...aiSettings, apiBaseUrl: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#e8e6df] dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-hidden focus:ring-2 focus:ring-[#da7756]/40 text-[#141413] dark:text-stone-100"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1">
-                    API Key (密钥安全仅保存在本地)
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="sk-..."
-                    value={aiSettings.apiKey}
-                    onChange={(e) => setAiSettings({ ...aiSettings, apiKey: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#e8e6df] dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-hidden focus:ring-2 focus:ring-[#da7756]/40 text-[#141413] dark:text-stone-100 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-stone-600 dark:text-stone-400 mb-1">
-                    Model Name (模型代号)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="gemini-3.7-flash 或 deepseek-chat"
-                    value={aiSettings.modelName}
-                    onChange={(e) => setAiSettings({ ...aiSettings, modelName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#e8e6df] dark:border-stone-700 bg-white dark:bg-stone-800 focus:outline-hidden focus:ring-2 focus:ring-[#da7756]/40 text-[#141413] dark:text-stone-100 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={handleTestAIConnection}
-                  className="px-3 py-1.5 text-xs bg-[#f5f4ee] dark:bg-stone-800 hover:bg-[#e8e6df] dark:hover:bg-stone-700 rounded-lg text-[#141413] dark:text-stone-200 transition font-medium border border-[#e8e6df] dark:border-stone-700"
-                >
-                  测试连接连通性
-                </button>
-                {testStatus === 'testing' && (
-                  <span className="text-xs text-stone-400 animate-pulse">正在测试...</span>
-                )}
-                {testStatus === 'success' && (
-                  <span className="text-xs text-[#00c853] flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> 连接正常
-                  </span>
-                )}
-                {testStatus?.startsWith('failed') && (
-                  <span className="text-xs text-[#ff5f38] flex items-center gap-1 font-medium truncate max-w-xs">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {testStatus}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="h-[1px] bg-[#e8e6df] dark:border-stone-800" />
-
           {/* Section 2: Anti-Spoiler & Reading Settings */}
           {readerSettings && (
             <div className="space-y-3">
@@ -493,7 +353,7 @@ export const SettingsModal: React.FC<Props> = ({ onClose, onSettingsUpdated, the
               关闭
             </button>
             <button
-              onClick={handleSaveAISettings}
+              onClick={handleSaveSettings}
               className="px-5 py-2 text-xs font-medium bg-[#da7756] hover:bg-[#c86341] text-white rounded-xl shadow-xs transition"
             >
               保存配置
