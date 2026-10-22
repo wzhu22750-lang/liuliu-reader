@@ -1,0 +1,17 @@
+{
+  "appId": "com.liuli.reader",
+  "appName": "溜溜读书",
+  "webDir": "dist",
+  "backgroundColor": "#ffffff",
+  "android": {
+    "backgroundColor": "#ffffff",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "LIGHT"
+    }
+  },
+  "loggingBehavior": "none"
+}

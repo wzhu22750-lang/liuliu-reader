@@ -8,15 +8,17 @@ import {
   RotateCcw,
   Trash2,
   FileText,
-  Sparkles,
   Search,
   LayoutGrid,
   List as ListIcon,
-  DownloadCloud,
   CheckCircle2,
   Library as LibraryIcon,
+  UserRound,
+  SlidersHorizontal,
+  Upload,
+  DownloadCloud,
 } from 'lucide-react';
-import { Book } from '../types';
+import { Book, ReaderSettings } from '../types';
 import {
   getAllBooks,
   saveBook,
@@ -28,15 +30,17 @@ import {
 import { parseTxtContent, TxtParseResult } from '../parsers/txtParser';
 import { parseEpubFile, createBookFromEpub } from '../parsers/epubParser';
 import { TxtSplitPreviewModal } from './TxtSplitPreviewModal';
-import { TomatoImportModal } from './TomatoImportModal';
 import { SettingsModal } from './SettingsModal';
+import { FanqieImportView } from './FanqieImportView';
 
 interface Props {
   onOpenBook: (book: Book) => void;
   onOpenExcerpts: () => void;
+  theme: ReaderSettings['theme'];
+  onThemeChange: (theme: ReaderSettings['theme']) => void | Promise<void>;
 }
 
-export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
+export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts, theme, onThemeChange }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -45,7 +49,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
   // Modals
   const [showImportMenu, setShowImportMenu] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [showTomatoModal, setShowTomatoModal] = useState<boolean>(false);
+  const [showFanqie, setShowFanqie] = useState<boolean>(false);
   const [txtModalData, setTxtModalData] = useState<{
     rawText: string;
     fileName: string;
@@ -63,14 +67,6 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
-  };
-
-  const handleOpenBookSafely = (book: Book) => {
-    if (book.sourceType === 'tomato' && book.fetchStatus?.status !== 'READY') {
-      showToast(book.fetchStatus?.error || '这本网络小说尚未完整导入，暂时不能阅读');
-      return;
-    }
-    onOpenBook(book);
   };
 
   const loadBooks = async () => {
@@ -226,6 +222,115 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
     return themes[sum % themes.length];
   };
 
+  if (theme === 'ink' || theme === 'claude') {
+    return (
+      <div className={`${theme === 'claude' ? 'claude-app' : 'ink-app'} min-h-screen pb-24`}>
+        {toastMessage && (
+          <div className="ink-toast fixed top-5 left-1/2 z-50 -translate-x-1/2 px-4 py-2 text-xs">
+            {toastMessage}
+          </div>
+        )}
+
+        <header className="ink-page-header">
+          <div>
+            <p className="ink-eyebrow">LIULIU READER</p>
+            <h1>书架</h1>
+            <p className="ink-header-note">共 {books.length} 本书 · 安静阅读，随时继续</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" className="ink-icon-button" onClick={() => setShowFanqie(true)} aria-label="在线找书">
+              <DownloadCloud className="w-5 h-5" />
+            </button>
+            <button type="button" className="ink-icon-button" onClick={() => setShowImportMenu((value) => !value)} aria-label="导入书籍">
+              <Upload className="w-5 h-5" />
+            </button>
+            <button type="button" className="ink-icon-button" onClick={() => setShowSettings(true)} aria-label="我的与设置">
+              <SlidersHorizontal className="w-5 h-5" />
+            </button>
+          </div>
+        </header>
+
+        {showImportMenu && (
+          <div className="ink-import-menu">
+            <label className="ink-action-row">
+              <FileText className="w-5 h-5" />
+              <span><strong>导入 TXT</strong><small>按目录规则拆分为章节</small></span>
+              <input type="file" accept=".txt,text/plain" className="hidden" onChange={handleTxtFileUpload} />
+            </label>
+            <label className="ink-action-row">
+              <BookOpen className="w-5 h-5" />
+              <span><strong>导入 EPUB</strong><small>解析本地电子书文件</small></span>
+              <input type="file" accept=".epub,application/epub+zip" className="hidden" onChange={handleEpubFileUpload} />
+            </label>
+            <button type="button" className="ink-action-row" onClick={() => { setShowImportMenu(false); setShowFanqie(true); }}>
+              <DownloadCloud className="w-5 h-5" />
+              <span><strong>在线找书</strong><small>检索书名并下载 TXT 入库</small></span>
+            </button>
+          </div>
+        )}
+
+        <main className="ink-page-main">
+          <div className="ink-search-line">
+            <Search className="w-4 h-4" />
+            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索书名或作者" aria-label="搜索书名或作者" />
+          </div>
+
+          <section className="ink-section">
+            <div className="ink-section-heading"><span>正在阅读</span><span>{filteredBooks.length} 本</span></div>
+            {loading ? (
+              <div className="ink-empty">正在整理书架…</div>
+            ) : filteredBooks.length === 0 ? (
+              <div className="ink-empty">没有找到匹配的书籍</div>
+            ) : (
+              <div className="ink-book-list">
+                {filteredBooks.map((book) => {
+                  const progress = book.progress?.percentage || 0;
+                  return (
+                    <article key={book.id} className="ink-book-row">
+                      <button type="button" className="ink-book-cover" onClick={() => onOpenBook(book)} aria-label={`阅读《${book.title}》`}>
+                        <span>{book.title.slice(0, 1)}</span>
+                      </button>
+                      <button type="button" className="ink-book-copy" onClick={() => onOpenBook(book)}>
+                        <strong>{book.title}</strong>
+                        <span>{book.author || '佚名'} · {book.chapters.length} 章</span>
+                        <small>{book.progress?.chapterTitle || '从第一章开始'} · 已读 {progress}%</small>
+                      </button>
+                      <button type="button" className="ink-row-more" onClick={() => setActiveMenuBookId(activeMenuBookId === book.id ? null : book.id)} aria-label={`管理《${book.title}》`}>
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                      {activeMenuBookId === book.id && (
+                        <div className="ink-book-actions">
+                          <button type="button" onClick={() => handleResetProgress(book)}><RotateCcw className="w-4 h-4" /> 从头阅读</button>
+                          <button type="button" onClick={() => handleDeleteBook(book)}><Trash2 className="w-4 h-4" /> 删除书籍</button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
+
+        <nav className="ink-bottom-nav" aria-label="主导航">
+          <button type="button" onClick={onOpenExcerpts}><BookMarked className="w-6 h-6" /><span>摘抄</span></button>
+          <button type="button" className="is-active"><LibraryIcon className="w-6 h-6" /><span>书架</span></button>
+          <button type="button" onClick={() => setShowSettings(true)}><UserRound className="w-6 h-6" /><span>我的</span></button>
+        </nav>
+
+        {txtModalData && <TxtSplitPreviewModal rawText={txtModalData.rawText} fileName={txtModalData.fileName} initialResult={txtModalData.initialResult} onConfirm={handleConfirmTxtImport} onCancel={() => setTxtModalData(null)} />}
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} onSettingsUpdated={loadBooks} theme={theme} onThemeChange={onThemeChange} />}
+        {showFanqie && (
+          <FanqieImportView
+            onClose={() => { setShowFanqie(false); void loadBooks(); }}
+            onImported={() => void loadBooks()}
+            onOpenBook={onOpenBook}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f4ee] text-[#141413] transition-colors duration-200">
       {/* Toast */}
@@ -332,25 +437,20 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
                       />
                     </label>
 
-                    {/* Tomato Link */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowImportMenu(false);
-                        setShowTomatoModal(true);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-[#f5f4ee] text-left transition"
-                    >
-                      <Sparkles className="w-4 h-4 text-[#da7756]" />
-                      <div>
-                        <div className="font-semibold">番茄 / 网络小说链接</div>
-                        <div className="text-[10px] text-stone-500">后台完整导入后阅读</div>
-                      </div>
-                    </button>
                   </div>
                 </>
               )}
             </div>
+
+            {/* Online search */}
+            <button
+              type="button"
+              onClick={() => setShowFanqie(true)}
+              className="p-2 rounded-xl text-stone-700 hover:bg-[#e8e6df]/70 transition"
+              title="在线找书"
+            >
+              <DownloadCloud className="w-4 h-4" />
+            </button>
 
             {/* Settings */}
             <button
@@ -426,7 +526,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               {searchQuery ? '未找到匹配的书籍' : '书架空空如也'}
             </p>
             <p className="text-xs text-stone-500 max-w-sm">
-              点击右上角「导入书籍」导入本地 TXT / EPUB 文件，或粘贴网络小说链接开始阅读。
+              点击右上角「导入书籍」导入本地 TXT / EPUB 文件开始阅读。
             </p>
           </div>
         ) : viewMode === 'grid' ? (
@@ -440,7 +540,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               return (
                 <div
                   key={book.id}
-                  onClick={() => handleOpenBookSafely(book)}
+                  onClick={() => onOpenBook(book)}
                   className="group relative flex flex-col cursor-pointer select-none"
                 >
                   {/* Book Typographic Milk-White Minimalist Cover */}
@@ -557,7 +657,7 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
               return (
                 <div
                   key={book.id}
-                  onClick={() => handleOpenBookSafely(book)}
+                  onClick={() => onOpenBook(book)}
                   className="p-3.5 sm:p-4 rounded-2xl bg-white border border-[#e8e6df] shadow-xs hover:shadow-md transition flex items-center justify-between gap-4 cursor-pointer"
                 >
                   <div className="flex items-center gap-3.5 truncate">
@@ -624,28 +724,22 @@ export const Library: React.FC<Props> = ({ onOpenBook, onOpenExcerpts }) => {
         />
       )}
 
-      {/* Tomato Import Modal */}
-      {showTomatoModal && (
-        <TomatoImportModal
-          onSuccess={(book, openDirectly) => {
-            setShowTomatoModal(false);
-            loadBooks();
-            if (openDirectly) {
-              onOpenBook(book);
-            }
-          }}
-          onClose={() => {
-            setShowTomatoModal(false);
-            loadBooks();
-          }}
-        />
-      )}
-
       {/* Settings Modal */}
       {showSettings && (
         <SettingsModal
           onClose={() => setShowSettings(false)}
           onSettingsUpdated={() => loadBooks()}
+          theme={theme}
+          onThemeChange={onThemeChange}
+        />
+      )}
+
+      {/* Online search */}
+      {showFanqie && (
+        <FanqieImportView
+          onClose={() => { setShowFanqie(false); void loadBooks(); }}
+          onImported={() => void loadBooks()}
+          onOpenBook={onOpenBook}
         />
       )}
     </div>

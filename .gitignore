@@ -8,3 +8,9 @@ coverage/
 !.env.example
 
 .local/
+.playwright-cli/
+output/
+
+# Android build artifacts
+*.apk
+*.apk.idsig

@@ -11,9 +11,11 @@ import {
   Filter,
   Search,
   BookOpen,
+  Library as LibraryIcon,
+  UserRound,
   Sparkles,
 } from 'lucide-react';
-import { Excerpt, Book } from '../types';
+import { Excerpt, Book, ReaderSettings } from '../types';
 import {
   getAllExcerpts,
   deleteExcerpt,
@@ -24,9 +26,11 @@ import {
 interface Props {
   onOpenBookToChapter?: (bookId: string, chapterIndex: number) => void;
   onBackToLibrary: () => void;
+  onOpenSettings?: () => void;
+  theme?: ReaderSettings['theme'];
 }
 
-export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLibrary }) => {
+export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLibrary, onOpenSettings, theme }) => {
   const [excerpts, setExcerpts] = useState<Excerpt[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [selectedBookFilter, setSelectedBookFilter] = useState<string>('all');
@@ -100,8 +104,75 @@ export const ExcerptsView: React.FC<Props> = ({ onOpenBookToChapter, onBackToLib
     return matchBook && matchQuery;
   });
 
+  if (theme === 'ink' || theme === 'claude') {
+    const themeClass = theme === 'claude' ? 'claude-excerpts' : 'ink-excerpts';
+
+    return (
+      <div className={`${themeClass} ink-excerpts-page min-h-screen pb-24`}>
+        <header className="ink-page-header">
+          <div>
+            <p className="ink-eyebrow">LIULIU READER</p>
+            <h1>摘抄</h1>
+            <p className="ink-header-note">已留存 {excerpts.length} 条文字片段</p>
+          </div>
+          <button type="button" className="ink-icon-button" onClick={onBackToLibrary} aria-label="返回书架"><BookOpen className="w-5 h-5" /></button>
+        </header>
+
+        <main className="ink-page-main">
+          <div className="ink-search-line">
+            <Search className="w-4 h-4" />
+            <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="搜索摘抄、书名或心得" aria-label="搜索摘抄" />
+          </div>
+          <div className="ink-filter-strip" aria-label="书籍筛选">
+            <button type="button" className={selectedBookFilter === 'all' ? 'is-selected' : ''} onClick={() => setSelectedBookFilter('all')}>全部</button>
+            {uniqueBookTitles.map((title) => <button key={title} type="button" className={selectedBookFilter === title ? 'is-selected' : ''} onClick={() => setSelectedBookFilter(title)}>{title}</button>)}
+          </div>
+
+          <section className="ink-section">
+            <div className="ink-section-heading"><span>文字片段</span><span>{filteredExcerpts.length} 条</span></div>
+            {filteredExcerpts.length === 0 ? (
+              <div className="ink-empty">还没有匹配的摘抄</div>
+            ) : (
+              <div className="ink-excerpt-list">
+                {filteredExcerpts.map((item) => {
+                  const canOpenSource = existingBookIds.has(item.bookId);
+                  return (
+                    <article key={item.id} className="ink-excerpt-row">
+                      <button type="button" className="ink-excerpt-source" disabled={!canOpenSource} onClick={() => canOpenSource && onOpenBookToChapter?.(item.bookId, item.chapterIndex)}>
+                        <span>《{item.bookTitle}》</span><small>{item.chapterTitle}</small>
+                      </button>
+                      <blockquote>“{item.text}”</blockquote>
+                      {item.thought && editingThoughtId !== item.id && <p className="ink-excerpt-thought">{item.thought}</p>}
+                      {editingThoughtId === item.id && (
+                        <div className="ink-excerpt-editor">
+                          <textarea rows={3} value={thoughtInput} onChange={(event) => setThoughtInput(event.target.value)} placeholder="记录你的阅读心得" />
+                          <div><button type="button" onClick={() => setEditingThoughtId(null)}>取消</button><button type="button" onClick={() => handleSaveThought(item.id)}>保存</button></div>
+                        </div>
+                      )}
+                      <div className="ink-excerpt-actions">
+                        <button type="button" onClick={() => { setEditingThoughtId(item.id); setThoughtInput(item.thought || ''); }}><MessageSquare className="w-4 h-4" /> {item.thought ? '编辑心得' : '写心得'}</button>
+                        <button type="button" onClick={(event) => handleShare(item, event)}>{copiedId === item.id ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />} {copiedId === item.id ? '已复制' : '分享'}</button>
+                        <button type="button" onClick={(event) => handleDelete(item.id, event)} aria-label="删除摘抄"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </main>
+
+        <nav className="ink-bottom-nav" aria-label="主导航">
+          <button type="button" className="is-active"><BookMarked className="w-6 h-6" /><span>摘抄</span></button>
+          <button type="button" onClick={onBackToLibrary}><LibraryIcon className="w-6 h-6" /><span>书架</span></button>
+          <button type="button" onClick={onOpenSettings} aria-label="打开我的设置"><UserRound className="w-6 h-6" /><span>我的</span></button>
+        </nav>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200 font-sans">
+    <div className={`${theme === 'ink' || theme === 'claude' ? `ink-excerpts ${theme === 'claude' ? 'claude-excerpts' : ''}` : ''} max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6 animate-in fade-in duration-200 font-sans`}>
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#e8e6df] dark:border-stone-800">
         <div className="flex items-center gap-3">

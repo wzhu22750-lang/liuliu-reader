@@ -14,11 +14,9 @@ import {
 } from 'lucide-react';
 import {
   findCachedAIInterpretation,
-  saveAIInterpretation,
   addExcerpt,
-  getAISettings,
 } from '../db/indexedDB';
-import { AIInterpretation, Excerpt } from '../types';
+import { Excerpt } from '../types';
 
 interface Props {
   bookId: string;
@@ -75,58 +73,11 @@ export const AISheet: React.FC<Props> = ({
       }
     }
 
-    try {
-      const aiSettings = await getAISettings();
-
-      const response = await fetch('/api/ai/explain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selectedText,
-          precedingText,
-          followingText: spoilerScope === 'current' ? '' : followingText,
-          bookTitle,
-          chapterTitle,
-          progressPercentage,
-          spoilerScope,
-          customConfig: aiSettings.apiKey
-            ? {
-                apiBaseUrl: aiSettings.apiBaseUrl,
-                apiKey: aiSettings.apiKey,
-                modelName: aiSettings.modelName,
-              }
-            : undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `请求失败 (${response.status})`);
-      }
-
-      const data = await response.json();
-      const output = data.explanation || '未能生成解读';
-      setExplanation(output);
-      setIsCached(false);
-      setSource(data.source || 'Gemini 3.7 Flash');
-
-      // 2. Persist result locally
-      const record: AIInterpretation = {
-        id: `ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        bookId,
-        chapterIndex,
-        selectedText,
-        explanation: output,
-        spoilerScope,
-        createdAt: Date.now(),
-      };
-      await saveAIInterpretation(record);
-    } catch (err: any) {
-      console.error('AI interpretation error:', err);
-      setError(err.message || 'AI 解读发生异常，请检查网络或稍后重试');
-    } finally {
-      setLoading(false);
-    }
+    setExplanation('');
+    setIsCached(false);
+    setSource('');
+    setError('当前为前端阅读器，尚未接入 AI 服务。你可以继续阅读、划线和保存摘抄。');
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -274,16 +225,9 @@ export const AISheet: React.FC<Props> = ({
             <div className="p-4 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-2xl text-xs border border-red-200 dark:border-red-900 flex items-start gap-3">
               <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
               <div className="space-y-2">
-                <p className="font-semibold">AI 解读未能完成</p>
+                <p className="font-semibold">AI 服务尚未接入</p>
                 <p>{error}</p>
-                <button
-                  type="button"
-                  onClick={() => fetchAIExplanation(true)}
-                  className="mt-2 px-3 py-1.5 bg-[#da7756] hover:bg-[#c86341] text-white rounded-lg transition font-medium text-xs flex items-center gap-1.5"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  重新尝试
-                </button>
+
               </div>
             </div>
           ) : (
@@ -307,7 +251,7 @@ export const AISheet: React.FC<Props> = ({
           <button
             type="button"
             onClick={() => fetchAIExplanation(true)}
-            disabled={loading}
+            disabled={loading || !!error}
             className="px-3 py-2 text-xs text-stone-600 dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50"
             title="强制重新生成解读"
           >

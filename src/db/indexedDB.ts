@@ -5,31 +5,24 @@ import {
   Bookmark,
   AIInterpretation,
   ReaderSettings,
-  AISettings,
   BackupData,
 } from '../types';
 import { DEMO_BOOKS } from '../parsers/demoBooks';
 
 const DB_NAME = 'ReaderAIDatabase';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.8,
-  theme: 'light',
+  theme: 'ink',
   renderMode: 'scroll',
   spoilerScope: 'current',
   lastHighlightStyle: 'amber',
   autoSnapSentence: true,
 };
 
-export const DEFAULT_AI_SETTINGS: AISettings = {
-  apiBaseUrl: '',
-  apiKey: '',
-  modelName: 'gemini-3.7-flash',
-};
-
-function openDB(): Promise<IDBDatabase> {
+export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -147,9 +140,9 @@ export async function saveBook(book: Book): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('books', 'readwrite');
     const store = tx.objectStore('books');
-    const request = store.put(book);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    store.put(book);
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error('书籍保存事务失败')); };
   });
 }
 
@@ -398,7 +391,12 @@ export async function getReaderSettings(): Promise<ReaderSettings> {
     const store = tx.objectStore('app_settings');
     const request = store.get('reader_settings');
     request.onsuccess = () => {
-      resolve({ ...DEFAULT_READER_SETTINGS, ...(request.result?.value || {}) });
+      const settings = { ...DEFAULT_READER_SETTINGS, ...(request.result?.value || {}) } as ReaderSettings & { theme?: string };
+      // Old theme identifiers are intentionally retired. Existing readers safely land on Claude style.
+      if (settings.theme !== 'ink' && settings.theme !== 'claude') {
+        settings.theme = 'claude';
+      }
+      resolve(settings as ReaderSettings);
     };
     request.onerror = () => resolve(DEFAULT_READER_SETTINGS);
   });
@@ -410,30 +408,6 @@ export async function saveReaderSettings(settings: ReaderSettings): Promise<void
     const tx = db.transaction('app_settings', 'readwrite');
     const store = tx.objectStore('app_settings');
     const request = store.put({ key: 'reader_settings', value: settings });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
-}
-
-export async function getAISettings(): Promise<AISettings> {
-  const db = await openDB();
-  return new Promise((resolve) => {
-    const tx = db.transaction('app_settings', 'readonly');
-    const store = tx.objectStore('app_settings');
-    const request = store.get('ai_settings');
-    request.onsuccess = () => {
-      resolve({ ...DEFAULT_AI_SETTINGS, ...(request.result?.value || {}) });
-    };
-    request.onerror = () => resolve(DEFAULT_AI_SETTINGS);
-  });
-}
-
-export async function saveAISettings(settings: AISettings): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('app_settings', 'readwrite');
-    const store = tx.objectStore('app_settings');
-    const request = store.put({ key: 'ai_settings', value: settings });
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });

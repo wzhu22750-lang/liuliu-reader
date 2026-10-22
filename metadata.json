@@ -1,6 +1,6 @@
 {
   "name": "溜溜读书",
-  "description": "极简、无广告、本地优先的小说阅读器，深度整合阅读、摘抄、高亮与防剧透AI语境解读。",
+  "description": "本地优先的纯前端小说阅读器，支持 TXT、EPUB、书架、摘抄、高亮与阅读设置；可选通过本机设备桥接在线找书并入库。",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }
